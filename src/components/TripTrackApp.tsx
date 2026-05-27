@@ -165,7 +165,7 @@ export default function TripTrackApp() {
           <SettingsView
             lineToken={lineToken}
             lineTarget={lineTarget}
-            onSave={(tok, target) => {
+            onSave={(tok: string, target: string) => {
               setLineToken(tok);
               setLineTarget(target);
               localStorage.setItem("lineToken", tok);
