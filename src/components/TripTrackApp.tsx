@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import {
   MapPin,
   Navigation,
@@ -18,7 +19,12 @@ import {
   Clock,
   X,
   Send,
+  Settings as SettingsIcon,
+  KeyRound,
+  ExternalLink,
 } from "lucide-react";
+import { sendLineMessage } from "@/lib/line.functions";
+import logoUrl from "@/assets/engcorp-logo.png";
 
 declare global {
   interface Window {
@@ -49,11 +55,13 @@ type Trip = {
 };
 
 export default function TripTrackApp() {
-  const [activeTab, setActiveTab] = useState<"form" | "dashboard">("form");
+  const [activeTab, setActiveTab] = useState<"form" | "dashboard" | "settings">("form");
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [employeeName, setEmployeeName] = useState("");
+  const [lineToken, setLineToken] = useState("");
+  const [lineTarget, setLineTarget] = useState("");
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -76,6 +84,8 @@ export default function TripTrackApp() {
       setTrips(savedTrips);
       const savedName = localStorage.getItem("employeeName");
       if (savedName) setEmployeeName(savedName);
+      setLineToken(localStorage.getItem("lineToken") || "");
+      setLineTarget(localStorage.getItem("lineTarget") || "");
     } catch {}
   }, []);
 
@@ -101,18 +111,36 @@ export default function TripTrackApp() {
   };
 
   return (
-    <div className={`min-h-screen ${isDarkMode ? "dark bg-gray-900 text-gray-100" : "bg-gray-50 text-gray-900"} pb-24`}>
-      <header className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-4 flex items-center justify-between shadow-lg sticky top-0 z-30">
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          <Navigation size={24} /> TripTrack Pro
-        </h1>
-        <button
-          onClick={() => setIsDarkMode(!isDarkMode)}
-          className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition"
-          aria-label="toggle dark mode"
-        >
-          {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-        </button>
+    <div
+      className={`min-h-screen ${
+        isDarkMode
+          ? "dark bg-slate-950 text-slate-100"
+          : "bg-gradient-to-br from-slate-50 via-blue-50/40 to-slate-100 text-slate-900"
+      } pb-24`}
+    >
+      <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-800 sticky top-0 z-30">
+        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-white dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 shadow-sm grid place-items-center overflow-hidden">
+              <img src={logoUrl} alt="EJH Logo" className="w-9 h-9 object-contain" />
+            </div>
+            <div className="leading-tight">
+              <h1 className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-blue-700 to-indigo-600 bg-clip-text text-transparent">
+                EJH Check In
+              </h1>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                ระบบบันทึกงาน & GPS
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition"
+            aria-label="toggle dark mode"
+          >
+            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+        </div>
       </header>
 
       <main className="max-w-2xl mx-auto p-4">
@@ -125,25 +153,45 @@ export default function TripTrackApp() {
           />
         )}
         {activeTab === "dashboard" && (
-          <DashboardView trips={trips} employeeName={employeeName} showToast={showToast} />
+          <DashboardView
+            trips={trips}
+            employeeName={employeeName}
+            showToast={showToast}
+            lineToken={lineToken}
+            lineTarget={lineTarget}
+          />
+        )}
+        {activeTab === "settings" && (
+          <SettingsView
+            lineToken={lineToken}
+            lineTarget={lineTarget}
+            onSave={(tok: string, target: string) => {
+              setLineToken(tok);
+              setLineTarget(target);
+              localStorage.setItem("lineToken", tok);
+              localStorage.setItem("lineTarget", target);
+              showToast("บันทึกการตั้งค่า LINE เรียบร้อย");
+            }}
+            showToast={showToast}
+          />
         )}
       </main>
 
       {toast && (
         <div
-          className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-xl shadow-xl text-white flex items-center gap-2 ${
-            toast.type === "success" ? "bg-green-600" : "bg-red-600"
+          className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-2xl shadow-2xl text-white flex items-center gap-2 backdrop-blur ${
+            toast.type === "success" ? "bg-emerald-600/95" : "bg-red-600/95"
           }`}
         >
           {toast.type === "success" ? <CheckCircle size={18} /> : <AlertTriangle size={18} />}
-          <span>{toast.msg}</span>
+          <span className="text-sm font-medium">{toast.msg}</span>
         </div>
       )}
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t dark:border-gray-700 flex z-30 shadow-2xl">
+      <nav className="fixed bottom-3 left-3 right-3 max-w-2xl mx-auto bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl flex z-30 shadow-2xl">
         <NavButton
           icon={<FileText />}
-          label="บันทึกงาน & GPS"
+          label="บันทึกงาน"
           isActive={activeTab === "form"}
           onClick={() => setActiveTab("form")}
         />
@@ -152,6 +200,12 @@ export default function TripTrackApp() {
           label="รายงาน"
           isActive={activeTab === "dashboard"}
           onClick={() => setActiveTab("dashboard")}
+        />
+        <NavButton
+          icon={<SettingsIcon />}
+          label="ตั้งค่า"
+          isActive={activeTab === "settings"}
+          onClick={() => setActiveTab("settings")}
         />
       </nav>
     </div>
@@ -172,13 +226,13 @@ function NavButton({
   return (
     <button
       onClick={onClick}
-      className={`flex-1 flex flex-col items-center py-3 gap-1 text-xs font-medium transition ${
+      className={`flex-1 flex flex-col items-center py-3 gap-1 text-[11px] font-semibold transition rounded-2xl mx-1 my-1 ${
         isActive
-          ? "text-blue-600 dark:text-blue-400"
-          : "text-gray-500 dark:text-gray-400 hover:text-gray-700"
+          ? "text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/50"
+          : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
       }`}
     >
-      {React.cloneElement(icon as React.ReactElement<any>, { size: 24 })}
+      {React.cloneElement(icon as React.ReactElement<any>, { size: 22 })}
       <span>{label}</span>
     </button>
   );
@@ -812,11 +866,17 @@ function DashboardView({
   trips,
   employeeName,
   showToast,
+  lineToken,
+  lineTarget,
 }: {
   trips: Trip[];
   employeeName: string;
   showToast: (m: string, t?: string) => void;
+  lineToken: string;
+  lineTarget: string;
 }) {
+  const sendLine = useServerFn(sendLineMessage);
+  const [sending, setSending] = useState(false);
   const todayStr = new Date().toISOString().split("T")[0];
   const todayTrips = trips.filter((t) => t.date === todayStr);
   const todayDist = todayTrips.reduce((s, t) => s + parseFloat((t.dist as any) || 0), 0).toFixed(1);
@@ -828,30 +888,57 @@ function DashboardView({
     .reduce((s, t) => s + parseFloat((t.cost as any) || 0), 0)
     .toLocaleString();
 
-  const handleShareLine = () => {
-    if (todayTrips.length === 0) {
-      showToast("วันนี้ยังไม่ได้ลงงานเลยเพื่อน จะส่งอะไรล่ะ 555", "error");
-      return;
-    }
+  const buildMessage = () => {
     const todayTh = new Date().toLocaleDateString("th-TH", {
       year: "numeric",
       month: "long",
       day: "numeric",
     });
-    let text = `📋 *สรุปงานประจำวัน*: ${todayTh}\n`;
-    text += `👤 *พนักงาน*: ${employeeName || "ไม่ระบุชื่อ"}\n`;
-    text += `🚗 *ระยะทางรวมวันนี้*: ${todayDist} km\n`;
-    text += `💰 *ค่าเดินทางรวมวันนี้*: ฿${todayCost}\n\n`;
-    text += `📍 *สถานที่เข้าพบ (${todayTrips.length} แห่ง)*:\n`;
+    let text = `📋 สรุปงานประจำวัน: ${todayTh}\n`;
+    text += `👤 พนักงาน: ${employeeName || "ไม่ระบุชื่อ"}\n`;
+    text += `🚗 ระยะทางรวมวันนี้: ${todayDist} km\n`;
+    text += `💰 ค่าเดินทางรวมวันนี้: ฿${todayCost}\n\n`;
+    text += `📍 สถานที่เข้าพบ (${todayTrips.length} แห่ง):\n`;
     const sortedTrips = [...todayTrips].reverse();
     sortedTrips.forEach((t, i) => {
       const tIn = t.timeIn || "-";
       const tOut = t.timeOut || "-";
       text += `${i + 1}. ${t.place} (${tIn} ถึง ${tOut})\n`;
     });
-    const lineUrl = `https://line.me/R/msg/text/?${encodeURIComponent(text)}`;
+    return text;
+  };
+
+  const handleSendLineNotify = async () => {
+    if (todayTrips.length === 0) {
+      showToast("วันนี้ยังไม่ได้ลงงานเลยเพื่อน จะส่งอะไรล่ะ 555", "error");
+      return;
+    }
+    if (!lineToken) {
+      showToast("ยังไม่ได้ตั้งค่า LINE Access Token (ไปแท็บตั้งค่า)", "error");
+      return;
+    }
+    setSending(true);
+    try {
+      await sendLine({
+        data: { accessToken: lineToken, targetId: lineTarget, message: buildMessage() },
+      });
+      showToast("ส่งแจ้งเตือนเข้า LINE สำเร็จ ✅");
+    } catch (e: any) {
+      showToast(`ส่งไม่สำเร็จ: ${e?.message || "unknown"}`, "error");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleShareLine = () => {
+    if (todayTrips.length === 0) {
+      showToast("วันนี้ยังไม่ได้ลงงานเลย", "error");
+      return;
+    }
+    const lineUrl = `https://line.me/R/msg/text/?${encodeURIComponent(buildMessage())}`;
     window.open(lineUrl, "_blank");
   };
+
 
   return (
     <div className="space-y-4">
@@ -869,12 +956,21 @@ function DashboardView({
             <p className="text-2xl font-bold">฿{todayCost}</p>
           </div>
         </div>
-        <button
-          onClick={handleShareLine}
-          className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition active:scale-[0.98]"
-        >
-          <Send size={18} /> ส่งสรุปยอดเข้า LINE
-        </button>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={handleSendLineNotify}
+            disabled={sending}
+            className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition active:scale-[0.98]"
+          >
+            <Send size={16} /> {sending ? "กำลังส่ง..." : "แจ้งเตือน LINE"}
+          </button>
+          <button
+            onClick={handleShareLine}
+            className="bg-white/15 hover:bg-white/25 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition active:scale-[0.98] border border-white/20"
+          >
+            <ExternalLink size={16} /> แชร์มือ
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -918,6 +1014,123 @@ function DashboardView({
               </div>
             ))
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SettingsView({
+  lineToken,
+  lineTarget,
+  onSave,
+  showToast,
+}: {
+  lineToken: string;
+  lineTarget: string;
+  onSave: (token: string, target: string) => void;
+  showToast: (m: string, t?: string) => void;
+}) {
+  const [token, setToken] = useState(lineToken);
+  const [target, setTarget] = useState(lineTarget);
+  const [testing, setTesting] = useState(false);
+  const sendLine = useServerFn(sendLineMessage);
+
+  const handleTest = async () => {
+    if (!token) {
+      showToast("กรอก Access Token ก่อน", "error");
+      return;
+    }
+    setTesting(true);
+    try {
+      await sendLine({
+        data: {
+          accessToken: token,
+          targetId: target,
+          message: "🔔 EJH Check In: ทดสอบการแจ้งเตือนสำเร็จ",
+        },
+      });
+      showToast("ส่งทดสอบสำเร็จ ✅");
+    } catch (e: any) {
+      showToast(`ทดสอบไม่ผ่าน: ${e?.message || "unknown"}`, "error");
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <SettingsIcon className="text-blue-600" size={22} />
+        <h2 className="text-xl font-bold">ตั้งค่าระบบ</h2>
+      </div>
+
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-5 space-y-4 border border-slate-200/60 dark:border-slate-700">
+        <div className="flex items-center gap-2">
+          <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 grid place-items-center">
+            <KeyRound className="text-emerald-600" size={20} />
+          </div>
+          <div>
+            <h3 className="font-bold">การแจ้งเตือนผ่าน LINE</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              ใช้ Channel Access Token (Messaging API)
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium block mb-1">
+            LINE Channel Access Token <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            rows={3}
+            placeholder="วาง Access Token จาก LINE Developers Console..."
+            className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium block mb-1">
+            Target ID (User ID / Group ID)
+          </label>
+          <input
+            type="text"
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            placeholder="เช่น U1234... (เว้นว่าง = broadcast ทุกคน)"
+            className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
+          />
+          <p className="text-[11px] text-slate-500 mt-1">
+            ถ้าเว้นว่าง จะส่งแบบ broadcast (ต้องมีผู้ติดตาม OA)
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 pt-2">
+          <button
+            onClick={() => onSave(token.trim(), target.trim())}
+            className="bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow transition active:scale-[0.98]"
+          >
+            <Save size={16} /> บันทึก
+          </button>
+          <button
+            onClick={handleTest}
+            disabled={testing}
+            className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow transition active:scale-[0.98]"
+          >
+            <Send size={16} /> {testing ? "ส่ง..." : "ทดสอบส่ง"}
+          </button>
+        </div>
+
+        <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-xl p-3 text-xs space-y-1">
+          <p className="font-bold text-blue-700 dark:text-blue-300">📘 วิธีรับ Token</p>
+          <ol className="list-decimal list-inside space-y-0.5 text-slate-700 dark:text-slate-300">
+            <li>เข้า <a href="https://developers.line.biz/console/" target="_blank" rel="noreferrer" className="underline text-blue-600">LINE Developers Console</a></li>
+            <li>สร้าง Provider → Channel แบบ Messaging API</li>
+            <li>ไปแท็บ "Messaging API" คัดลอก Channel Access Token</li>
+            <li>เพิ่ม Bot เป็นเพื่อน แล้วใช้ User ID ของคุณเป็น Target</li>
+          </ol>
         </div>
       </div>
     </div>
