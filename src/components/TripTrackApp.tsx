@@ -866,11 +866,17 @@ function DashboardView({
   trips,
   employeeName,
   showToast,
+  lineToken,
+  lineTarget,
 }: {
   trips: Trip[];
   employeeName: string;
   showToast: (m: string, t?: string) => void;
+  lineToken: string;
+  lineTarget: string;
 }) {
+  const sendLine = useServerFn(sendLineMessage);
+  const [sending, setSending] = useState(false);
   const todayStr = new Date().toISOString().split("T")[0];
   const todayTrips = trips.filter((t) => t.date === todayStr);
   const todayDist = todayTrips.reduce((s, t) => s + parseFloat((t.dist as any) || 0), 0).toFixed(1);
@@ -882,30 +888,57 @@ function DashboardView({
     .reduce((s, t) => s + parseFloat((t.cost as any) || 0), 0)
     .toLocaleString();
 
-  const handleShareLine = () => {
-    if (todayTrips.length === 0) {
-      showToast("วันนี้ยังไม่ได้ลงงานเลยเพื่อน จะส่งอะไรล่ะ 555", "error");
-      return;
-    }
+  const buildMessage = () => {
     const todayTh = new Date().toLocaleDateString("th-TH", {
       year: "numeric",
       month: "long",
       day: "numeric",
     });
-    let text = `📋 *สรุปงานประจำวัน*: ${todayTh}\n`;
-    text += `👤 *พนักงาน*: ${employeeName || "ไม่ระบุชื่อ"}\n`;
-    text += `🚗 *ระยะทางรวมวันนี้*: ${todayDist} km\n`;
-    text += `💰 *ค่าเดินทางรวมวันนี้*: ฿${todayCost}\n\n`;
-    text += `📍 *สถานที่เข้าพบ (${todayTrips.length} แห่ง)*:\n`;
+    let text = `📋 สรุปงานประจำวัน: ${todayTh}\n`;
+    text += `👤 พนักงาน: ${employeeName || "ไม่ระบุชื่อ"}\n`;
+    text += `🚗 ระยะทางรวมวันนี้: ${todayDist} km\n`;
+    text += `💰 ค่าเดินทางรวมวันนี้: ฿${todayCost}\n\n`;
+    text += `📍 สถานที่เข้าพบ (${todayTrips.length} แห่ง):\n`;
     const sortedTrips = [...todayTrips].reverse();
     sortedTrips.forEach((t, i) => {
       const tIn = t.timeIn || "-";
       const tOut = t.timeOut || "-";
       text += `${i + 1}. ${t.place} (${tIn} ถึง ${tOut})\n`;
     });
-    const lineUrl = `https://line.me/R/msg/text/?${encodeURIComponent(text)}`;
+    return text;
+  };
+
+  const handleSendLineNotify = async () => {
+    if (todayTrips.length === 0) {
+      showToast("วันนี้ยังไม่ได้ลงงานเลยเพื่อน จะส่งอะไรล่ะ 555", "error");
+      return;
+    }
+    if (!lineToken) {
+      showToast("ยังไม่ได้ตั้งค่า LINE Access Token (ไปแท็บตั้งค่า)", "error");
+      return;
+    }
+    setSending(true);
+    try {
+      await sendLine({
+        data: { accessToken: lineToken, targetId: lineTarget, message: buildMessage() },
+      });
+      showToast("ส่งแจ้งเตือนเข้า LINE สำเร็จ ✅");
+    } catch (e: any) {
+      showToast(`ส่งไม่สำเร็จ: ${e?.message || "unknown"}`, "error");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleShareLine = () => {
+    if (todayTrips.length === 0) {
+      showToast("วันนี้ยังไม่ได้ลงงานเลย", "error");
+      return;
+    }
+    const lineUrl = `https://line.me/R/msg/text/?${encodeURIComponent(buildMessage())}`;
     window.open(lineUrl, "_blank");
   };
+
 
   return (
     <div className="space-y-4">
