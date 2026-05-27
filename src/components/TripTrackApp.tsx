@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import {
   MapPin,
   Navigation,
@@ -18,7 +19,12 @@ import {
   Clock,
   X,
   Send,
+  Settings as SettingsIcon,
+  KeyRound,
+  ExternalLink,
 } from "lucide-react";
+import { sendLineMessage } from "@/lib/line.functions";
+import logoUrl from "@/assets/engcorp-logo.png";
 
 declare global {
   interface Window {
@@ -49,11 +55,13 @@ type Trip = {
 };
 
 export default function TripTrackApp() {
-  const [activeTab, setActiveTab] = useState<"form" | "dashboard">("form");
+  const [activeTab, setActiveTab] = useState<"form" | "dashboard" | "settings">("form");
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [employeeName, setEmployeeName] = useState("");
+  const [lineToken, setLineToken] = useState("");
+  const [lineTarget, setLineTarget] = useState("");
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -76,6 +84,8 @@ export default function TripTrackApp() {
       setTrips(savedTrips);
       const savedName = localStorage.getItem("employeeName");
       if (savedName) setEmployeeName(savedName);
+      setLineToken(localStorage.getItem("lineToken") || "");
+      setLineTarget(localStorage.getItem("lineTarget") || "");
     } catch {}
   }, []);
 
@@ -101,18 +111,36 @@ export default function TripTrackApp() {
   };
 
   return (
-    <div className={`min-h-screen ${isDarkMode ? "dark bg-gray-900 text-gray-100" : "bg-gray-50 text-gray-900"} pb-24`}>
-      <header className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-4 flex items-center justify-between shadow-lg sticky top-0 z-30">
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          <Navigation size={24} /> TripTrack Pro
-        </h1>
-        <button
-          onClick={() => setIsDarkMode(!isDarkMode)}
-          className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition"
-          aria-label="toggle dark mode"
-        >
-          {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-        </button>
+    <div
+      className={`min-h-screen ${
+        isDarkMode
+          ? "dark bg-slate-950 text-slate-100"
+          : "bg-gradient-to-br from-slate-50 via-blue-50/40 to-slate-100 text-slate-900"
+      } pb-24`}
+    >
+      <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-800 sticky top-0 z-30">
+        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-white dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 shadow-sm grid place-items-center overflow-hidden">
+              <img src={logoUrl} alt="EJH Logo" className="w-9 h-9 object-contain" />
+            </div>
+            <div className="leading-tight">
+              <h1 className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-blue-700 to-indigo-600 bg-clip-text text-transparent">
+                EJH Check In
+              </h1>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                ระบบบันทึกงาน & GPS
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition"
+            aria-label="toggle dark mode"
+          >
+            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+        </div>
       </header>
 
       <main className="max-w-2xl mx-auto p-4">
@@ -125,25 +153,45 @@ export default function TripTrackApp() {
           />
         )}
         {activeTab === "dashboard" && (
-          <DashboardView trips={trips} employeeName={employeeName} showToast={showToast} />
+          <DashboardView
+            trips={trips}
+            employeeName={employeeName}
+            showToast={showToast}
+            lineToken={lineToken}
+            lineTarget={lineTarget}
+          />
+        )}
+        {activeTab === "settings" && (
+          <SettingsView
+            lineToken={lineToken}
+            lineTarget={lineTarget}
+            onSave={(tok, target) => {
+              setLineToken(tok);
+              setLineTarget(target);
+              localStorage.setItem("lineToken", tok);
+              localStorage.setItem("lineTarget", target);
+              showToast("บันทึกการตั้งค่า LINE เรียบร้อย");
+            }}
+            showToast={showToast}
+          />
         )}
       </main>
 
       {toast && (
         <div
-          className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-xl shadow-xl text-white flex items-center gap-2 ${
-            toast.type === "success" ? "bg-green-600" : "bg-red-600"
+          className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-2xl shadow-2xl text-white flex items-center gap-2 backdrop-blur ${
+            toast.type === "success" ? "bg-emerald-600/95" : "bg-red-600/95"
           }`}
         >
           {toast.type === "success" ? <CheckCircle size={18} /> : <AlertTriangle size={18} />}
-          <span>{toast.msg}</span>
+          <span className="text-sm font-medium">{toast.msg}</span>
         </div>
       )}
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t dark:border-gray-700 flex z-30 shadow-2xl">
+      <nav className="fixed bottom-3 left-3 right-3 max-w-2xl mx-auto bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl flex z-30 shadow-2xl">
         <NavButton
           icon={<FileText />}
-          label="บันทึกงาน & GPS"
+          label="บันทึกงาน"
           isActive={activeTab === "form"}
           onClick={() => setActiveTab("form")}
         />
@@ -152,6 +200,12 @@ export default function TripTrackApp() {
           label="รายงาน"
           isActive={activeTab === "dashboard"}
           onClick={() => setActiveTab("dashboard")}
+        />
+        <NavButton
+          icon={<SettingsIcon />}
+          label="ตั้งค่า"
+          isActive={activeTab === "settings"}
+          onClick={() => setActiveTab("settings")}
         />
       </nav>
     </div>
