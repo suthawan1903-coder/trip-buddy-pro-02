@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&family=Sarabun:wght@400;500;600;700&display=swap");
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
@@ -137,8 +138,11 @@
     border-color: var(--color-border);
   }
 
-  body {
+  html, body {
+    font-family: "Prompt", "Sarabun", system-ui, -apple-system, "Segoe UI", sans-serif;
     background-color: var(--color-background);
     color: var(--color-foreground);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 }
