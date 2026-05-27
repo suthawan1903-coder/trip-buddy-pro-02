@@ -14,7 +14,63 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      trips: {
+        Row: {
+          cost: number
+          created_at: string
+          distance: number
+          district: string | null
+          employee_name: string
+          id: string
+          images: Json
+          job: string | null
+          mode: string
+          place: string
+          province: string | null
+          status: string
+          time_in: string | null
+          time_out: string | null
+          trip_date: string
+          vehicle: string
+        }
+        Insert: {
+          cost?: number
+          created_at?: string
+          distance?: number
+          district?: string | null
+          employee_name: string
+          id?: string
+          images?: Json
+          job?: string | null
+          mode?: string
+          place: string
+          province?: string | null
+          status?: string
+          time_in?: string | null
+          time_out?: string | null
+          trip_date?: string
+          vehicle?: string
+        }
+        Update: {
+          cost?: number
+          created_at?: string
+          distance?: number
+          district?: string | null
+          employee_name?: string
+          id?: string
+          images?: Json
+          job?: string | null
+          mode?: string
+          place?: string
+          province?: string | null
+          status?: string
+          time_in?: string | null
+          time_out?: string | null
+          trip_date?: string
+          vehicle?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
