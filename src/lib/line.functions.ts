@@ -2,25 +2,19 @@ import { createServerFn } from "@tanstack/react-start";
 
 export const sendLineMessage = createServerFn({ method: "POST" })
   .inputValidator(
-    (input: { accessToken: string; targetId: string; message: string }) => {
+    (input: { accessToken: string; channelSecret?: string; message: string }) => {
       if (!input?.accessToken || typeof input.accessToken !== "string")
-        throw new Error("Access token ไม่ถูกต้อง");
+        throw new Error("Channel access token ไม่ถูกต้อง");
       if (!input?.message || typeof input.message !== "string")
         throw new Error("ข้อความว่างเปล่า");
       return input;
     }
   )
   .handler(async ({ data }) => {
-    const { accessToken, targetId, message } = data;
-
-    // ถ้ามี targetId ใช้ push (Messaging API) ถ้าไม่ใช้ broadcast
-    const endpoint = targetId
-      ? "https://api.line.me/v2/bot/message/push"
-      : "https://api.line.me/v2/bot/message/broadcast";
-
-    const body = targetId
-      ? { to: targetId, messages: [{ type: "text", text: message }] }
-      : { messages: [{ type: "text", text: message }] };
+    const { accessToken, message } = data;
+    // ใช้ broadcast เพื่อส่งถึงผู้ติดตาม OA ทุกคน (ไม่ต้องมี targetId)
+    const endpoint = "https://api.line.me/v2/bot/message/broadcast";
+    const body = { messages: [{ type: "text", text: message }] };
 
     const res = await fetch(endpoint, {
       method: "POST",
