@@ -956,12 +956,21 @@ function DashboardView({
             <p className="text-2xl font-bold">฿{todayCost}</p>
           </div>
         </div>
-        <button
-          onClick={handleShareLine}
-          className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition active:scale-[0.98]"
-        >
-          <Send size={18} /> ส่งสรุปยอดเข้า LINE
-        </button>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={handleSendLineNotify}
+            disabled={sending}
+            className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition active:scale-[0.98]"
+          >
+            <Send size={16} /> {sending ? "กำลังส่ง..." : "แจ้งเตือน LINE"}
+          </button>
+          <button
+            onClick={handleShareLine}
+            className="bg-white/15 hover:bg-white/25 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition active:scale-[0.98] border border-white/20"
+          >
+            <ExternalLink size={16} /> แชร์มือ
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
