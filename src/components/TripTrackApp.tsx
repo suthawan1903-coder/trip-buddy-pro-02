@@ -22,8 +22,12 @@ import {
   Settings as SettingsIcon,
   KeyRound,
   ExternalLink,
+  Fuel,
+  Edit3,
+  Satellite,
 } from "lucide-react";
 import { sendLineMessage } from "@/lib/line.functions";
+import { supabase } from "@/integrations/supabase/client";
 import logoUrl from "@/assets/engcorp-logo.png";
 
 declare global {
@@ -54,14 +58,27 @@ type Trip = {
   status: string;
 };
 
+type AppSettings = {
+  lineToken: string;
+  lineSecret: string;
+  fuelPrice: number; // บาท/ลิตร
+  ratePerKm: number; // บาท/กม. (0 = ใช้ default ของรถ)
+};
+
+const DEFAULT_SETTINGS: AppSettings = {
+  lineToken: "",
+  lineSecret: "",
+  fuelPrice: 38,
+  ratePerKm: 0,
+};
+
 export default function TripTrackApp() {
   const [activeTab, setActiveTab] = useState<"form" | "dashboard" | "settings">("form");
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [employeeName, setEmployeeName] = useState("");
-  const [lineToken, setLineToken] = useState("");
-  const [lineTarget, setLineTarget] = useState("");
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -80,13 +97,35 @@ export default function TripTrackApp() {
     }
 
     try {
-      const savedTrips = JSON.parse(localStorage.getItem("completedTrips") || "[]");
-      setTrips(savedTrips);
       const savedName = localStorage.getItem("employeeName");
       if (savedName) setEmployeeName(savedName);
-      setLineToken(localStorage.getItem("lineToken") || "");
-      setLineTarget(localStorage.getItem("lineTarget") || "");
+      const raw = localStorage.getItem("appSettings");
+      if (raw) setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(raw) });
     } catch {}
+
+    // Load trips from Supabase
+    (async () => {
+      const { data, error } = await supabase
+        .from("trips")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (!error && data) {
+        setTrips(
+          data.map((r: any) => ({
+            id: r.id,
+            date: r.trip_date,
+            employeeName: r.employee_name,
+            place: r.place,
+            timeIn: r.time_in || "",
+            timeOut: r.time_out || "",
+            dist: r.distance,
+            cost: r.cost,
+            status: r.status,
+          }))
+        );
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -100,14 +139,18 @@ export default function TripTrackApp() {
   };
 
   const handleAddTrip = (newTrip: Trip) => {
-    const updated = [newTrip, ...trips];
-    setTrips(updated);
-    localStorage.setItem("completedTrips", JSON.stringify(updated));
+    setTrips((prev) => [newTrip, ...prev]);
   };
 
   const handleNameChange = (n: string) => {
     setEmployeeName(n);
     localStorage.setItem("employeeName", n);
+  };
+
+  const saveSettings = (s: AppSettings) => {
+    setSettings(s);
+    localStorage.setItem("appSettings", JSON.stringify(s));
+    showToast("บันทึกการตั้งค่าเรียบร้อย");
   };
 
   return (
@@ -150,6 +193,7 @@ export default function TripTrackApp() {
             onAddTrip={handleAddTrip}
             employeeName={employeeName}
             onNameChange={handleNameChange}
+            settings={settings}
           />
         )}
         {activeTab === "dashboard" && (
@@ -157,23 +201,11 @@ export default function TripTrackApp() {
             trips={trips}
             employeeName={employeeName}
             showToast={showToast}
-            lineToken={lineToken}
-            lineTarget={lineTarget}
+            settings={settings}
           />
         )}
         {activeTab === "settings" && (
-          <SettingsView
-            lineToken={lineToken}
-            lineTarget={lineTarget}
-            onSave={(tok: string, target: string) => {
-              setLineToken(tok);
-              setLineTarget(target);
-              localStorage.setItem("lineToken", tok);
-              localStorage.setItem("lineTarget", target);
-              showToast("บันทึกการตั้งค่า LINE เรียบร้อย");
-            }}
-            showToast={showToast}
-          />
+          <SettingsView settings={settings} onSave={saveSettings} showToast={showToast} />
         )}
       </main>
 
@@ -189,24 +221,9 @@ export default function TripTrackApp() {
       )}
 
       <nav className="fixed bottom-3 left-3 right-3 max-w-2xl mx-auto bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl flex z-30 shadow-2xl">
-        <NavButton
-          icon={<FileText />}
-          label="บันทึกงาน"
-          isActive={activeTab === "form"}
-          onClick={() => setActiveTab("form")}
-        />
-        <NavButton
-          icon={<BarChart3 />}
-          label="รายงาน"
-          isActive={activeTab === "dashboard"}
-          onClick={() => setActiveTab("dashboard")}
-        />
-        <NavButton
-          icon={<SettingsIcon />}
-          label="ตั้งค่า"
-          isActive={activeTab === "settings"}
-          onClick={() => setActiveTab("settings")}
-        />
+        <NavButton icon={<FileText />} label="บันทึกงาน" isActive={activeTab === "form"} onClick={() => setActiveTab("form")} />
+        <NavButton icon={<BarChart3 />} label="รายงาน" isActive={activeTab === "dashboard"} onClick={() => setActiveTab("dashboard")} />
+        <NavButton icon={<SettingsIcon />} label="ตั้งค่า" isActive={activeTab === "settings"} onClick={() => setActiveTab("settings")} />
       </nav>
     </div>
   );
@@ -243,20 +260,26 @@ function FormView({
   onAddTrip,
   employeeName,
   onNameChange,
+  settings,
 }: {
   showToast: (m: string, t?: string) => void;
   onAddTrip: (t: Trip) => void;
   employeeName: string;
   onNameChange: (n: string) => void;
+  settings: AppSettings;
 }) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const [mapInstance, setMapInstance] = useState<any>(null);
   const [isTracking, setIsTracking] = useState(false);
   const [distance, setDistance] = useState<number | string>(0);
+  const [manualDistance, setManualDistance] = useState<string>("");
+  const [manualCost, setManualCost] = useState<string>("");
+  const [trackingMode, setTrackingMode] = useState<"gps" | "manual">("gps");
   const [startPoint, setStartPoint] = useState<[number, number] | null>(null);
   const [destPoint, setDestPoint] = useState<[number, number] | null>(null);
   const [vehicle, setVehicle] = useState<"car" | "pickup" | "motorcycle">("car");
+  const [saving, setSaving] = useState(false);
   const routeLayerRef = useRef<any>(null);
   const startMarkerRef = useRef<any>(null);
   const destMarkerRef = useRef<any>(null);
@@ -275,6 +298,9 @@ function FormView({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [customers, setCustomers] = useState(mockCustomers);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
+
+  // Effective rate per km
+  const effectiveRate = settings.ratePerKm > 0 ? settings.ratePerKm : vehicleRates[vehicle].rate;
 
   useEffect(() => {
     const fetchCustomersFromSheet = async () => {
@@ -321,7 +347,7 @@ function FormView({
         }
         if (newCustomers.length > 0) setCustomers(newCustomers);
       } catch {
-        // fallback to mock
+        // fallback
       } finally {
         setIsLoadingCustomers(false);
       }
@@ -330,6 +356,7 @@ function FormView({
   }, []);
 
   useEffect(() => {
+    if (trackingMode !== "gps") return;
     if (!mapRef.current || mapInstance) return;
     let cancelled = false;
     const initMap = async () => {
@@ -353,9 +380,10 @@ function FormView({
     return () => {
       cancelled = true;
     };
-  }, [mapInstance]);
+  }, [mapInstance, trackingMode]);
 
   useEffect(() => {
+    if (trackingMode !== "gps") return;
     if (mapInstance && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -373,13 +401,11 @@ function FormView({
             mapInstance.setView(latlng, 15);
           }
         },
-        () => {
-          console.warn("GPS Auto-fetch denied");
-        }
+        () => console.warn("GPS Auto-fetch denied")
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapInstance]);
+  }, [mapInstance, trackingMode]);
 
   const calculateRouteTo = async (
     destLat: number,
@@ -408,7 +434,7 @@ function FormView({
   };
 
   const findStoreLocation = async (dist: string, prov: string) => {
-    if (!dist || !prov) return;
+    if (!dist || !prov || trackingMode !== "gps") return;
     try {
       showToast(`กำลังหาพิกัด อ.${dist} จ.${prov}...`);
       const query = `อำเภอ${dist}, จังหวัด${prov}, ประเทศไทย`;
@@ -426,7 +452,8 @@ function FormView({
           const redIcon = new window.L.Icon({
             iconUrl:
               "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png",
-            shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
+            shadowUrl:
+              "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
             iconSize: [25, 41],
             iconAnchor: [12, 41],
             popupAnchor: [1, -34],
@@ -438,11 +465,7 @@ function FormView({
             .bindPopup(`📍 ร้านปลายทาง (อ.${dist}, จ.${prov})`)
             .openPopup();
           mapInstance.setView(destination, 13);
-          if (startPoint) {
-            calculateRouteTo(lat, lon, startPoint);
-          } else {
-            showToast('📍 เจอพิกัดร้านแล้ว! กด "รีเฟรช GPS" เพื่อคำนวณระยะทางได้เลย');
-          }
+          if (startPoint) calculateRouteTo(lat, lon, startPoint);
         }
       } else {
         showToast(`ไม่พบพิกัด อ.${dist} ในระบบแผนที่`, "error");
@@ -467,27 +490,26 @@ function FormView({
                 .addTo(mapInstance)
                 .bindPopup("จุดเริ่มต้นของคุณ")
                 .openPopup();
-              if (destPoint) {
-                showToast("จุดเริ่มต้นพร้อม! กำลังลากเส้นทางไปร้านค้า...");
-                calculateRouteTo(destPoint[0], destPoint[1], latlng);
-              } else {
-                showToast("เริ่มจับ GPS! เลือกร้านค้าเพื่อคำนวณเส้นทาง");
-                mapInstance.setView(latlng, 15);
-              }
+              if (destPoint) calculateRouteTo(destPoint[0], destPoint[1], latlng);
+              else mapInstance.setView(latlng, 15);
             }
           },
           () => showToast("กรุณาเปิด GPS ด้วยนะเพื่อน", "error")
         );
-      } else {
-        showToast("Browser ไม่รองรับ GPS", "error");
-      }
+      } else showToast("Browser ไม่รองรับ GPS", "error");
     } else {
       setIsTracking(false);
       showToast("จบการเดินทางเรียบร้อย");
     }
   };
 
-  const currentExpense = (parseFloat(distance.toString()) * vehicleRates[vehicle].rate).toFixed(2);
+  // Compute final dist/cost based on mode
+  const finalDistance =
+    trackingMode === "manual" ? parseFloat(manualDistance || "0") : parseFloat(distance.toString() || "0");
+  const finalCost =
+    trackingMode === "manual" && manualCost
+      ? parseFloat(manualCost)
+      : parseFloat((finalDistance * effectiveRate).toFixed(2));
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -548,7 +570,7 @@ function FormView({
     showToast(`บันทึกเวลา${field === "timeIn" ? "เข้า" : "ออก"}สำเร็จ: ${timeString}`);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!employeeName.trim()) {
       showToast("อย่าลืมกรอกชื่อ-นามสกุล ก่อนเซฟนะเพื่อน!", "error");
       return;
@@ -557,38 +579,74 @@ function FormView({
       showToast("เลือกร้านค้าก่อนนะเพื่อน!", "error");
       return;
     }
-    const newTrip: Trip = {
-      id: "T-" + Math.floor(1000 + Math.random() * 9000),
-      date: formData.date,
-      employeeName,
-      place: formData.place,
-      timeIn: formData.timeIn,
-      timeOut: formData.timeOut,
-      dist: distance,
-      cost: currentExpense,
-      status: "รออนุมัติ",
-    };
-    onAddTrip(newTrip);
-    showToast("บันทึกข้อมูลเรียบร้อย (อัปเดตในหน้ารายงานแล้ว!)");
-    localStorage.removeItem("tripDraft");
+    if (finalDistance <= 0) {
+      showToast("กรุณาระบุระยะทาง (>0 km)", "error");
+      return;
+    }
 
-    setFormData((prev) => ({
-      ...prev,
-      place: "",
-      prov: "",
-      dist: "",
-      job: "",
-      timeIn: "",
-      timeOut: "",
-      images: [],
-    }));
-    setDistance(0);
-    setIsTracking(false);
-    setStartPoint(null);
-    setDestPoint(null);
-    if (routeLayerRef.current && mapInstance) mapInstance.removeLayer(routeLayerRef.current);
-    if (destMarkerRef.current && mapInstance) mapInstance.removeLayer(destMarkerRef.current);
-    if (startMarkerRef.current && mapInstance) mapInstance.removeLayer(startMarkerRef.current);
+    setSaving(true);
+    try {
+      const { data, error } = await supabase
+        .from("trips")
+        .insert({
+          trip_date: formData.date,
+          employee_name: employeeName,
+          place: formData.place,
+          province: formData.prov || null,
+          district: formData.dist || null,
+          time_in: formData.timeIn || null,
+          time_out: formData.timeOut || null,
+          distance: finalDistance,
+          cost: finalCost,
+          vehicle,
+          mode: trackingMode,
+          job: formData.job || null,
+          images: formData.images,
+          status: "รออนุมัติ",
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      onAddTrip({
+        id: data.id,
+        date: data.trip_date,
+        employeeName: data.employee_name,
+        place: data.place,
+        timeIn: data.time_in || "",
+        timeOut: data.time_out || "",
+        dist: data.distance,
+        cost: data.cost,
+        status: data.status,
+      });
+      showToast("บันทึกขึ้นฐานข้อมูลเรียบร้อย ✅");
+      localStorage.removeItem("tripDraft");
+
+      setFormData((prev) => ({
+        ...prev,
+        place: "",
+        prov: "",
+        dist: "",
+        job: "",
+        timeIn: "",
+        timeOut: "",
+        images: [],
+      }));
+      setDistance(0);
+      setManualDistance("");
+      setManualCost("");
+      setStartPoint(null);
+      setDestPoint(null);
+      setIsTracking(false);
+      if (routeLayerRef.current && mapInstance) mapInstance.removeLayer(routeLayerRef.current);
+      if (destMarkerRef.current && mapInstance) mapInstance.removeLayer(destMarkerRef.current);
+      if (startMarkerRef.current && mapInstance) mapInstance.removeLayer(startMarkerRef.current);
+    } catch (e: any) {
+      showToast(`บันทึกล้มเหลว: ${e?.message || "unknown"}`, "error");
+    } finally {
+      setSaving(false);
+    }
   };
 
   useEffect(() => {
@@ -602,70 +660,163 @@ function FormView({
 
   return (
     <div className="space-y-4">
-      {/* MAP & TRACKING */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
-        <div ref={mapRef} className="w-full h-64 bg-gray-200 dark:bg-gray-700" />
+      {/* MODE TOGGLE */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-3">
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => setTrackingMode("gps")}
+            className={`p-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition ${
+              trackingMode === "gps"
+                ? "bg-blue-600 text-white shadow"
+                : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+            }`}
+          >
+            <Satellite size={16} /> โหมด GPS อัตโนมัติ
+          </button>
+          <button
+            onClick={() => setTrackingMode("manual")}
+            className={`p-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition ${
+              trackingMode === "manual"
+                ? "bg-indigo-600 text-white shadow"
+                : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+            }`}
+          >
+            <Edit3 size={16} /> กรอกระยะทางเอง
+          </button>
+        </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="font-bold flex items-center gap-2">
-            <MapPin size={18} className="text-blue-600" />
-            ระบบจับพิกัดเดินทาง
-          </h2>
-          <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1 gap-1">
+      {/* MAP & TRACKING (GPS mode only) */}
+      {trackingMode === "gps" && (
+        <>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
+            <div ref={mapRef} className="w-full h-64 bg-gray-200 dark:bg-gray-700" />
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold flex items-center gap-2">
+                <MapPin size={18} className="text-blue-600" />
+                ระบบจับพิกัดเดินทาง
+              </h2>
+              <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1 gap-1">
+                <button
+                  onClick={() => setVehicle("motorcycle")}
+                  className={`p-2 rounded ${vehicle === "motorcycle" ? "bg-white dark:bg-gray-600 shadow" : ""}`}
+                  aria-label="motorcycle"
+                >
+                  <Bike size={18} />
+                </button>
+                <button
+                  onClick={() => setVehicle("car")}
+                  className={`p-2 rounded ${vehicle === "car" ? "bg-white dark:bg-gray-600 shadow" : ""}`}
+                  aria-label="car"
+                >
+                  <Car size={18} />
+                </button>
+                <button
+                  onClick={() => setVehicle("pickup")}
+                  className={`p-2 rounded ${vehicle === "pickup" ? "bg-white dark:bg-gray-600 shadow" : ""}`}
+                  aria-label="pickup"
+                >
+                  <Truck size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-xl">
+                <p className="text-xs text-gray-600 dark:text-gray-300">ระยะทางจริง</p>
+                <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
+                  {finalDistance.toFixed(2)} km
+                </p>
+              </div>
+              <div className="bg-green-50 dark:bg-green-900/30 p-3 rounded-xl">
+                <p className="text-xs text-gray-600 dark:text-gray-300">
+                  ค่าเดินทาง (฿{effectiveRate}/km)
+                </p>
+                <p className="text-2xl font-bold text-green-700 dark:text-green-300">
+                  ฿{finalCost.toFixed(2)}
+                </p>
+              </div>
+            </div>
+
             <button
-              onClick={() => setVehicle("motorcycle")}
-              className={`p-2 rounded ${vehicle === "motorcycle" ? "bg-white dark:bg-gray-600 shadow" : ""}`}
-              aria-label="motorcycle"
+              onClick={toggleTracking}
+              className={`w-full py-3 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition ${
+                isTracking ? "bg-red-500 hover:bg-red-600" : "bg-blue-600 hover:bg-blue-700"
+              }`}
             >
-              <Bike size={18} />
+              {isTracking ? (
+                <>
+                  <Square size={18} /> จบการเดินทาง
+                </>
+              ) : (
+                <>
+                  <Play size={18} /> รีเฟรชตำแหน่ง GPS ใหม่
+                </>
+              )}
             </button>
-            <button
-              onClick={() => setVehicle("car")}
-              className={`p-2 rounded ${vehicle === "car" ? "bg-white dark:bg-gray-600 shadow" : ""}`}
-              aria-label="car"
-            >
-              <Car size={18} />
-            </button>
-            <button
-              onClick={() => setVehicle("pickup")}
-              className={`p-2 rounded ${vehicle === "pickup" ? "bg-white dark:bg-gray-600 shadow" : ""}`}
-              aria-label="pickup"
-            >
-              <Truck size={18} />
-            </button>
+          </div>
+        </>
+      )}
+
+      {/* MANUAL ENTRY */}
+      {trackingMode === "manual" && (
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold flex items-center gap-2">
+              <Edit3 size={18} className="text-indigo-600" /> กรอกระยะทาง/ค่าเดินทางเอง
+            </h2>
+            <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1 gap-1">
+              <button onClick={() => setVehicle("motorcycle")} className={`p-2 rounded ${vehicle === "motorcycle" ? "bg-white dark:bg-gray-600 shadow" : ""}`}><Bike size={18} /></button>
+              <button onClick={() => setVehicle("car")} className={`p-2 rounded ${vehicle === "car" ? "bg-white dark:bg-gray-600 shadow" : ""}`}><Car size={18} /></button>
+              <button onClick={() => setVehicle("pickup")} className={`p-2 rounded ${vehicle === "pickup" ? "bg-white dark:bg-gray-600 shadow" : ""}`}><Truck size={18} /></button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium block mb-1 text-slate-600 dark:text-slate-300">
+                ระยะทาง (km)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                inputMode="decimal"
+                value={manualDistance}
+                onChange={(e) => setManualDistance(e.target.value)}
+                placeholder="เช่น 25.5"
+                className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-indigo-500 text-lg font-bold"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium block mb-1 text-slate-600 dark:text-slate-300">
+                ค่าเดินทาง (฿) — ว่าง = คำนวณอัตโนมัติ
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                inputMode="decimal"
+                value={manualCost}
+                onChange={(e) => setManualCost(e.target.value)}
+                placeholder={`คำนวณ: ฿${(parseFloat(manualDistance || "0") * effectiveRate).toFixed(2)}`}
+                className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-indigo-500 text-lg font-bold"
+              />
+            </div>
+          </div>
+
+          <div className="bg-indigo-50 dark:bg-indigo-950/40 rounded-xl p-3 flex justify-between items-center">
+            <div>
+              <p className="text-xs text-slate-600 dark:text-slate-300">รวมที่จะบันทึก</p>
+              <p className="text-lg font-bold text-indigo-700 dark:text-indigo-300">
+                {finalDistance.toFixed(2)} km · ฿{finalCost.toFixed(2)}
+              </p>
+            </div>
+            <span className="text-[11px] text-slate-500">เรท ฿{effectiveRate}/km</span>
           </div>
         </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-xl">
-            <p className="text-xs text-gray-600 dark:text-gray-300">ระยะทางจริง</p>
-            <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{distance} km</p>
-          </div>
-          <div className="bg-green-50 dark:bg-green-900/30 p-3 rounded-xl">
-            <p className="text-xs text-gray-600 dark:text-gray-300">ค่าเดินทาง (โดยประมาณ)</p>
-            <p className="text-2xl font-bold text-green-700 dark:text-green-300">฿{currentExpense}</p>
-          </div>
-        </div>
-
-        <button
-          onClick={toggleTracking}
-          className={`w-full py-3 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition ${
-            isTracking ? "bg-red-500 hover:bg-red-600" : "bg-blue-600 hover:bg-blue-700"
-          }`}
-        >
-          {isTracking ? (
-            <>
-              <Square size={18} /> จบการเดินทาง
-            </>
-          ) : (
-            <>
-              <Play size={18} /> รีเฟรชตำแหน่ง GPS ใหม่
-            </>
-          )}
-        </button>
-      </div>
+      )}
 
       {/* FORM SECTION */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 space-y-4">
@@ -748,30 +899,27 @@ function FormView({
                 ))}
               </div>
             )}
-            {showSuggestions && displaySuggestions.length === 0 && formData.place.length > 0 && (
-              <div className="absolute z-20 mt-1 left-0 right-0 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-xl p-3 text-sm text-gray-500">
-                ไม่พบข้อมูลในระบบ (สามารถพิมพ์ชื่อร้านใหม่เพื่อบันทึกได้เลย)
-              </div>
-            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-sm font-medium block mb-1">จังหวัด (Auto)</label>
+              <label className="text-sm font-medium block mb-1">จังหวัด</label>
               <input
                 type="text"
+                name="prov"
                 value={formData.prov}
-                readOnly
-                className="w-full p-3 rounded-lg border dark:border-gray-600 bg-gray-100 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300"
+                onChange={handleChange}
+                className="w-full p-3 rounded-lg border dark:border-gray-600 bg-gray-100 dark:bg-gray-700/50"
               />
             </div>
             <div>
-              <label className="text-sm font-medium block mb-1">อำเภอ (Auto)</label>
+              <label className="text-sm font-medium block mb-1">อำเภอ</label>
               <input
                 type="text"
+                name="dist"
                 value={formData.dist}
-                readOnly
-                className="w-full p-3 rounded-lg border dark:border-gray-600 bg-gray-100 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300"
+                onChange={handleChange}
+                className="w-full p-3 rounded-lg border dark:border-gray-600 bg-gray-100 dark:bg-gray-700/50"
               />
             </div>
           </div>
@@ -816,13 +964,7 @@ function FormView({
               หลักฐาน / บิลน้ำมัน / รูปถ่ายหน้างาน
             </label>
             <label className="block border-2 border-dashed dark:border-gray-600 rounded-xl p-6 text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handleImageUpload}
-                className="hidden"
-              />
+              <input type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />
               <Camera className="mx-auto text-gray-400" size={32} />
               <p className="text-sm mt-2 font-medium">แตะเพื่อถ่ายรูป หรือเลือกไฟล์</p>
               <p className="text-xs text-gray-500">อัปโหลดได้หลายรูป (JPG, PNG)</p>
@@ -831,11 +973,7 @@ function FormView({
               <div className="grid grid-cols-3 gap-2 mt-3">
                 {formData.images.map((imgSrc, index) => (
                   <div key={index} className="relative aspect-square">
-                    <img
-                      src={imgSrc}
-                      alt={`upload-${index}`}
-                      className="w-full h-full object-cover rounded-lg"
-                    />
+                    <img src={imgSrc} alt={`upload-${index}`} className="w-full h-full object-cover rounded-lg" />
                     <button
                       onClick={() => handleRemoveImage(index)}
                       className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-90 hover:opacity-100 hover:scale-110 transition shadow-md"
@@ -851,10 +989,11 @@ function FormView({
 
           <button
             onClick={handleSave}
-            className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition active:scale-[0.98]"
+            disabled={saving}
+            className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:opacity-60 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition active:scale-[0.98]"
           >
-            <Save size={18} /> บันทึกและส่งเบิก{" "}
-            {formData.images.length > 0 && `(พร้อม ${formData.images.length} รูป)`}
+            <Save size={18} /> {saving ? "กำลังบันทึก..." : "บันทึกและส่งเบิก"}
+            {formData.images.length > 0 && ` (พร้อม ${formData.images.length} รูป)`}
           </button>
         </div>
       </div>
@@ -866,27 +1005,21 @@ function DashboardView({
   trips,
   employeeName,
   showToast,
-  lineToken,
-  lineTarget,
+  settings,
 }: {
   trips: Trip[];
   employeeName: string;
   showToast: (m: string, t?: string) => void;
-  lineToken: string;
-  lineTarget: string;
+  settings: AppSettings;
 }) {
   const sendLine = useServerFn(sendLineMessage);
   const [sending, setSending] = useState(false);
   const todayStr = new Date().toISOString().split("T")[0];
   const todayTrips = trips.filter((t) => t.date === todayStr);
   const todayDist = todayTrips.reduce((s, t) => s + parseFloat((t.dist as any) || 0), 0).toFixed(1);
-  const todayCost = todayTrips
-    .reduce((s, t) => s + parseFloat((t.cost as any) || 0), 0)
-    .toLocaleString();
+  const todayCost = todayTrips.reduce((s, t) => s + parseFloat((t.cost as any) || 0), 0).toLocaleString();
   const totalDist = trips.reduce((s, t) => s + parseFloat((t.dist as any) || 0), 0).toFixed(1);
-  const totalCost = trips
-    .reduce((s, t) => s + parseFloat((t.cost as any) || 0), 0)
-    .toLocaleString();
+  const totalCost = trips.reduce((s, t) => s + parseFloat((t.cost as any) || 0), 0).toLocaleString();
 
   const buildMessage = () => {
     const todayTh = new Date().toLocaleDateString("th-TH", {
@@ -899,8 +1032,7 @@ function DashboardView({
     text += `🚗 ระยะทางรวมวันนี้: ${todayDist} km\n`;
     text += `💰 ค่าเดินทางรวมวันนี้: ฿${todayCost}\n\n`;
     text += `📍 สถานที่เข้าพบ (${todayTrips.length} แห่ง):\n`;
-    const sortedTrips = [...todayTrips].reverse();
-    sortedTrips.forEach((t, i) => {
+    [...todayTrips].reverse().forEach((t, i) => {
       const tIn = t.timeIn || "-";
       const tOut = t.timeOut || "-";
       text += `${i + 1}. ${t.place} (${tIn} ถึง ${tOut})\n`;
@@ -910,17 +1042,21 @@ function DashboardView({
 
   const handleSendLineNotify = async () => {
     if (todayTrips.length === 0) {
-      showToast("วันนี้ยังไม่ได้ลงงานเลยเพื่อน จะส่งอะไรล่ะ 555", "error");
+      showToast("วันนี้ยังไม่ได้ลงงานเลยเพื่อน", "error");
       return;
     }
-    if (!lineToken) {
+    if (!settings.lineToken) {
       showToast("ยังไม่ได้ตั้งค่า LINE Access Token (ไปแท็บตั้งค่า)", "error");
       return;
     }
     setSending(true);
     try {
       await sendLine({
-        data: { accessToken: lineToken, targetId: lineTarget, message: buildMessage() },
+        data: {
+          accessToken: settings.lineToken,
+          channelSecret: settings.lineSecret,
+          message: buildMessage(),
+        },
       });
       showToast("ส่งแจ้งเตือนเข้า LINE สำเร็จ ✅");
     } catch (e: any) {
@@ -938,7 +1074,6 @@ function DashboardView({
     const lineUrl = `https://line.me/R/msg/text/?${encodeURIComponent(buildMessage())}`;
     window.open(lineUrl, "_blank");
   };
-
 
   return (
     <div className="space-y-4">
@@ -987,7 +1122,6 @@ function DashboardView({
       <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-lg">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold">ประวัติทริปล่าสุด</h3>
-          <button className="text-xs text-blue-600 hover:underline">Export Excel</button>
         </div>
         <div className="space-y-2">
           {trips.length === 0 ? (
@@ -1001,12 +1135,12 @@ function DashboardView({
                 <div className="min-w-0 flex-1">
                   <p className="font-medium truncate">{trip.place}</p>
                   <p className="text-xs text-gray-500">
-                    {trip.date} •{" "}
+                    {trip.date} ·{" "}
                     {trip.timeIn ? `${trip.timeIn} - ${trip.timeOut || "?"}` : "ไม่ได้ลงเวลา"}
                   </p>
                 </div>
                 <div className="text-right ml-2">
-                  <p className="font-bold text-sm">{trip.dist} km</p>
+                  <p className="font-bold text-sm">{trip.dist} km · ฿{trip.cost}</p>
                   <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">
                     {trip.status}
                   </span>
@@ -1021,32 +1155,33 @@ function DashboardView({
 }
 
 function SettingsView({
-  lineToken,
-  lineTarget,
+  settings,
   onSave,
   showToast,
 }: {
-  lineToken: string;
-  lineTarget: string;
-  onSave: (token: string, target: string) => void;
+  settings: AppSettings;
+  onSave: (s: AppSettings) => void;
   showToast: (m: string, t?: string) => void;
 }) {
-  const [token, setToken] = useState(lineToken);
-  const [target, setTarget] = useState(lineTarget);
+  const [form, setForm] = useState<AppSettings>(settings);
   const [testing, setTesting] = useState(false);
   const sendLine = useServerFn(sendLineMessage);
 
+  useEffect(() => {
+    setForm(settings);
+  }, [settings]);
+
   const handleTest = async () => {
-    if (!token) {
-      showToast("กรอก Access Token ก่อน", "error");
+    if (!form.lineToken) {
+      showToast("กรอก Channel Access Token ก่อน", "error");
       return;
     }
     setTesting(true);
     try {
       await sendLine({
         data: {
-          accessToken: token,
-          targetId: target,
+          accessToken: form.lineToken,
+          channelSecret: form.lineSecret,
           message: "🔔 EJH Check In: ทดสอบการแจ้งเตือนสำเร็จ",
         },
       });
@@ -1065,6 +1200,7 @@ function SettingsView({
         <h2 className="text-xl font-bold">ตั้งค่าระบบ</h2>
       </div>
 
+      {/* LINE Settings */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-5 space-y-4 border border-slate-200/60 dark:border-slate-700">
         <div className="flex items-center gap-2">
           <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 grid place-items-center">
@@ -1073,66 +1209,126 @@ function SettingsView({
           <div>
             <h3 className="font-bold">การแจ้งเตือนผ่าน LINE</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              ใช้ Channel Access Token (Messaging API)
+              ใช้ Channel Access Token + Channel Secret (Messaging API)
             </p>
           </div>
         </div>
 
         <div>
           <label className="text-sm font-medium block mb-1">
-            LINE Channel Access Token <span className="text-red-500">*</span>
+            Channel access token <span className="text-red-500">*</span>
           </label>
           <textarea
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
+            value={form.lineToken}
+            onChange={(e) => setForm({ ...form, lineToken: e.target.value })}
             rows={3}
-            placeholder="วาง Access Token จาก LINE Developers Console..."
+            placeholder="วาง Channel Access Token (long-lived) จาก LINE Developers Console"
             className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
           />
         </div>
 
         <div>
-          <label className="text-sm font-medium block mb-1">
-            Target ID (User ID / Group ID)
-          </label>
+          <label className="text-sm font-medium block mb-1">Channel secret</label>
           <input
             type="text"
-            value={target}
-            onChange={(e) => setTarget(e.target.value)}
-            placeholder="เช่น U1234... (เว้นว่าง = broadcast ทุกคน)"
+            value={form.lineSecret}
+            onChange={(e) => setForm({ ...form, lineSecret: e.target.value })}
+            placeholder="วาง Channel Secret จาก LINE Developers Console"
             className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
           />
           <p className="text-[11px] text-slate-500 mt-1">
-            ถ้าเว้นว่าง จะส่งแบบ broadcast (ต้องมีผู้ติดตาม OA)
+            ใช้ในการตรวจสอบ webhook signature (เก็บไว้ใน localStorage)
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 pt-2">
-          <button
-            onClick={() => onSave(token.trim(), target.trim())}
-            className="bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow transition active:scale-[0.98]"
-          >
-            <Save size={16} /> บันทึก
-          </button>
-          <button
-            onClick={handleTest}
-            disabled={testing}
-            className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow transition active:scale-[0.98]"
-          >
-            <Send size={16} /> {testing ? "ส่ง..." : "ทดสอบส่ง"}
-          </button>
-        </div>
+        <button
+          onClick={handleTest}
+          disabled={testing}
+          className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow transition active:scale-[0.98]"
+        >
+          <Send size={16} /> {testing ? "กำลังส่ง..." : "ทดสอบส่งแจ้งเตือน LINE"}
+        </button>
 
         <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-xl p-3 text-xs space-y-1">
-          <p className="font-bold text-blue-700 dark:text-blue-300">📘 วิธีรับ Token</p>
+          <p className="font-bold text-blue-700 dark:text-blue-300">📘 วิธีรับ Token & Secret</p>
           <ol className="list-decimal list-inside space-y-0.5 text-slate-700 dark:text-slate-300">
-            <li>เข้า <a href="https://developers.line.biz/console/" target="_blank" rel="noreferrer" className="underline text-blue-600">LINE Developers Console</a></li>
+            <li>
+              เข้า{" "}
+              <a
+                href="https://developers.line.biz/console/"
+                target="_blank"
+                rel="noreferrer"
+                className="underline text-blue-600"
+              >
+                LINE Developers Console
+              </a>
+            </li>
             <li>สร้าง Provider → Channel แบบ Messaging API</li>
-            <li>ไปแท็บ "Messaging API" คัดลอก Channel Access Token</li>
-            <li>เพิ่ม Bot เป็นเพื่อน แล้วใช้ User ID ของคุณเป็น Target</li>
+            <li>แท็บ "Basic settings" คัดลอก Channel secret</li>
+            <li>แท็บ "Messaging API" คัดลอก Channel access token (long-lived)</li>
+            <li>เพิ่ม Bot เป็นเพื่อน เพื่อรับ broadcast แจ้งเตือน</li>
           </ol>
         </div>
       </div>
+
+      {/* Cost Settings */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-5 space-y-4 border border-slate-200/60 dark:border-slate-700">
+        <div className="flex items-center gap-2">
+          <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/40 grid place-items-center">
+            <Fuel className="text-orange-600" size={20} />
+          </div>
+          <div>
+            <h3 className="font-bold">ตั้งค่าค่าน้ำมัน / ค่าเดินทาง</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              ใช้คำนวณค่าใช้จ่ายในการเดินทาง
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-sm font-medium block mb-1">ราคาน้ำมัน (฿/ลิตร)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={form.fuelPrice}
+              onChange={(e) => setForm({ ...form, fuelPrice: parseFloat(e.target.value) || 0 })}
+              className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-orange-500 text-lg font-bold"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium block mb-1">
+              ราคาต่อกิโลเมตร (฿/km)
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              value={form.ratePerKm}
+              onChange={(e) => setForm({ ...form, ratePerKm: parseFloat(e.target.value) || 0 })}
+              placeholder="0 = ใช้ตามชนิดรถ"
+              className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-orange-500 text-lg font-bold"
+            />
+          </div>
+        </div>
+
+        <div className="bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-900 rounded-xl p-3 text-xs space-y-1">
+          <p className="font-semibold text-orange-700 dark:text-orange-300">
+            🚗 อัตราเริ่มต้นต่อกิโลเมตร (ถ้าตั้ง 0 ในช่องบน)
+          </p>
+          <ul className="text-slate-700 dark:text-slate-300 space-y-0.5">
+            <li>• มอเตอร์ไซค์: ฿{vehicleRates.motorcycle.rate}/km</li>
+            <li>• รถยนต์: ฿{vehicleRates.car.rate}/km</li>
+            <li>• รถกระบะ: ฿{vehicleRates.pickup.rate}/km</li>
+          </ul>
+        </div>
+      </div>
+
+      <button
+        onClick={() => onSave(form)}
+        className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition active:scale-[0.98]"
+      >
+        <Save size={18} /> บันทึกการตั้งค่าทั้งหมด
+      </button>
     </div>
   );
 }
