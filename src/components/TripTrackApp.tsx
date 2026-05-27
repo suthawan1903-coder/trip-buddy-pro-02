@@ -1019,3 +1019,120 @@ function DashboardView({
     </div>
   );
 }
+
+function SettingsView({
+  lineToken,
+  lineTarget,
+  onSave,
+  showToast,
+}: {
+  lineToken: string;
+  lineTarget: string;
+  onSave: (token: string, target: string) => void;
+  showToast: (m: string, t?: string) => void;
+}) {
+  const [token, setToken] = useState(lineToken);
+  const [target, setTarget] = useState(lineTarget);
+  const [testing, setTesting] = useState(false);
+  const sendLine = useServerFn(sendLineMessage);
+
+  const handleTest = async () => {
+    if (!token) {
+      showToast("กรอก Access Token ก่อน", "error");
+      return;
+    }
+    setTesting(true);
+    try {
+      await sendLine({
+        data: {
+          accessToken: token,
+          targetId: target,
+          message: "🔔 EJH Check In: ทดสอบการแจ้งเตือนสำเร็จ",
+        },
+      });
+      showToast("ส่งทดสอบสำเร็จ ✅");
+    } catch (e: any) {
+      showToast(`ทดสอบไม่ผ่าน: ${e?.message || "unknown"}`, "error");
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <SettingsIcon className="text-blue-600" size={22} />
+        <h2 className="text-xl font-bold">ตั้งค่าระบบ</h2>
+      </div>
+
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-5 space-y-4 border border-slate-200/60 dark:border-slate-700">
+        <div className="flex items-center gap-2">
+          <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 grid place-items-center">
+            <KeyRound className="text-emerald-600" size={20} />
+          </div>
+          <div>
+            <h3 className="font-bold">การแจ้งเตือนผ่าน LINE</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              ใช้ Channel Access Token (Messaging API)
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium block mb-1">
+            LINE Channel Access Token <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            rows={3}
+            placeholder="วาง Access Token จาก LINE Developers Console..."
+            className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium block mb-1">
+            Target ID (User ID / Group ID)
+          </label>
+          <input
+            type="text"
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            placeholder="เช่น U1234... (เว้นว่าง = broadcast ทุกคน)"
+            className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
+          />
+          <p className="text-[11px] text-slate-500 mt-1">
+            ถ้าเว้นว่าง จะส่งแบบ broadcast (ต้องมีผู้ติดตาม OA)
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 pt-2">
+          <button
+            onClick={() => onSave(token.trim(), target.trim())}
+            className="bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow transition active:scale-[0.98]"
+          >
+            <Save size={16} /> บันทึก
+          </button>
+          <button
+            onClick={handleTest}
+            disabled={testing}
+            className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow transition active:scale-[0.98]"
+          >
+            <Send size={16} /> {testing ? "ส่ง..." : "ทดสอบส่ง"}
+          </button>
+        </div>
+
+        <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-xl p-3 text-xs space-y-1">
+          <p className="font-bold text-blue-700 dark:text-blue-300">📘 วิธีรับ Token</p>
+          <ol className="list-decimal list-inside space-y-0.5 text-slate-700 dark:text-slate-300">
+            <li>เข้า <a href="https://developers.line.biz/console/" target="_blank" rel="noreferrer" className="underline text-blue-600">LINE Developers Console</a></li>
+            <li>สร้าง Provider → Channel แบบ Messaging API</li>
+            <li>ไปแท็บ "Messaging API" คัดลอก Channel Access Token</li>
+            <li>เพิ่ม Bot เป็นเพื่อน แล้วใช้ User ID ของคุณเป็น Target</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  );
+}
