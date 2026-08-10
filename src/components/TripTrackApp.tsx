@@ -186,7 +186,12 @@ export default function TripTrackApp() {
         </div>
       </header>
 
+      <div className="max-w-2xl mx-auto pt-3">
+        <InstallPrompt />
+      </div>
+
       <main className="max-w-2xl mx-auto p-4">
+
         {activeTab === "form" && (
           <FormView
             showToast={showToast}
