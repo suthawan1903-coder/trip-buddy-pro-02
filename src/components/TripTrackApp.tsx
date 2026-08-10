@@ -240,6 +240,10 @@ export default function TripTrackApp() {
         {activeTab === "settings" && (
           <SettingsView settings={settings} onSave={saveSettings} showToast={showToast} />
         )}
+        {activeTab === "employees" && isAdmin && (
+          <EmployeesView showToast={showToast} currentUserId={userId} />
+        )}
+
       </main>
 
       {toast && (
