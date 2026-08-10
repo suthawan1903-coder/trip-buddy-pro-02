@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { useNavigate } from "@tanstack/react-router";
+import { useSession } from "@/hooks/use-session";
+import EmployeesView from "@/components/EmployeesView";
+import { LogOut, Users as UsersIcon } from "lucide-react";
+
 import {
   MapPin,
   Navigation,
@@ -74,12 +79,15 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 export default function TripTrackApp() {
-  const [activeTab, setActiveTab] = useState<"form" | "dashboard" | "settings">("form");
+  const { profile, isAdmin, userId } = useSession();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<"form" | "dashboard" | "settings" | "employees">("form");
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
   const [trips, setTrips] = useState<Trip[]>([]);
-  const [employeeName, setEmployeeName] = useState("");
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const employeeName = profile?.full_name ?? "";
+
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -98,11 +106,10 @@ export default function TripTrackApp() {
     }
 
     try {
-      const savedName = localStorage.getItem("employeeName");
-      if (savedName) setEmployeeName(savedName);
       const raw = localStorage.getItem("appSettings");
       if (raw) setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(raw) });
     } catch {}
+
 
     // Load trips from Supabase
     (async () => {
@@ -143,10 +150,15 @@ export default function TripTrackApp() {
     setTrips((prev) => [newTrip, ...prev]);
   };
 
-  const handleNameChange = (n: string) => {
-    setEmployeeName(n);
-    localStorage.setItem("employeeName", n);
+  const handleNameChange = (_n: string) => {
+    /* ชื่อพนักงานมาจากบัญชีที่ล็อกอิน */
   };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    void navigate({ to: "/auth", replace: true });
+  };
+
 
   const saveSettings = (s: AppSettings) => {
     setSettings(s);
@@ -177,13 +189,28 @@ export default function TripTrackApp() {
               </p>
             </div>
           </div>
-          <button
-            onClick={() => setIsDarkMode(!isDarkMode)}
-            className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition"
-            aria-label="toggle dark mode"
-          >
-            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
+          <div className="flex items-center gap-2">
+            {profile && (
+              <span className="hidden sm:block text-[11px] font-semibold text-slate-600 dark:text-slate-300 max-w-[110px] truncate">
+                {profile.full_name}
+              </span>
+            )}
+            <button
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition"
+              aria-label="toggle dark mode"
+            >
+              {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+            <button
+              onClick={handleSignOut}
+              className="p-2.5 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 transition"
+              aria-label="ออกจากระบบ"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
+
         </div>
       </header>
 
@@ -213,6 +240,10 @@ export default function TripTrackApp() {
         {activeTab === "settings" && (
           <SettingsView settings={settings} onSave={saveSettings} showToast={showToast} />
         )}
+        {activeTab === "employees" && isAdmin && (
+          <EmployeesView showToast={showToast} currentUserId={userId} />
+        )}
+
       </main>
 
       {toast && (
@@ -230,6 +261,10 @@ export default function TripTrackApp() {
         <NavButton icon={<FileText />} label="บันทึกงาน" isActive={activeTab === "form"} onClick={() => setActiveTab("form")} />
         <NavButton icon={<BarChart3 />} label="รายงาน" isActive={activeTab === "dashboard"} onClick={() => setActiveTab("dashboard")} />
         <NavButton icon={<SettingsIcon />} label="ตั้งค่า" isActive={activeTab === "settings"} onClick={() => setActiveTab("settings")} />
+        {isAdmin && (
+          <NavButton icon={<UsersIcon />} label="พนักงาน" isActive={activeTab === "employees"} onClick={() => setActiveTab("employees")} />
+        )}
+
       </nav>
     </div>
   );
@@ -596,7 +631,9 @@ function FormView({
         .from("trips")
         .insert({
           trip_date: formData.date,
+          user_id: (await supabase.auth.getUser()).data.user?.id ?? null,
           employee_name: employeeName,
+
           place: formData.place,
           province: formData.prov || null,
           district: formData.dist || null,
