@@ -148,7 +148,11 @@ export const updateEmployee = createServerFn({ method: "POST" })
     if (!isAdmin) throw new Error("Forbidden");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const patch: Record<string, unknown> = {};
+    const patch: {
+      full_name?: string;
+      phone?: string | null;
+      active?: boolean;
+    } = {};
     if (data.fullName !== undefined) patch["full_name"] = data.fullName;
     if (data.phone !== undefined) patch["phone"] = data.phone || null;
     if (data.active !== undefined) patch["active"] = data.active;
