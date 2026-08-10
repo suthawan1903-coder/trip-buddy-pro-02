@@ -74,12 +74,15 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 export default function TripTrackApp() {
-  const [activeTab, setActiveTab] = useState<"form" | "dashboard" | "settings">("form");
+  const { profile, isAdmin, userId } = useSession();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<"form" | "dashboard" | "settings" | "employees">("form");
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
   const [trips, setTrips] = useState<Trip[]>([]);
-  const [employeeName, setEmployeeName] = useState("");
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const employeeName = profile?.full_name ?? "";
+
 
   useEffect(() => {
     if (typeof document === "undefined") return;
