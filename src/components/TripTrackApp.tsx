@@ -189,13 +189,28 @@ export default function TripTrackApp() {
               </p>
             </div>
           </div>
-          <button
-            onClick={() => setIsDarkMode(!isDarkMode)}
-            className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition"
-            aria-label="toggle dark mode"
-          >
-            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
+          <div className="flex items-center gap-2">
+            {profile && (
+              <span className="hidden sm:block text-[11px] font-semibold text-slate-600 dark:text-slate-300 max-w-[110px] truncate">
+                {profile.full_name}
+              </span>
+            )}
+            <button
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition"
+              aria-label="toggle dark mode"
+            >
+              {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+            <button
+              onClick={handleSignOut}
+              className="p-2.5 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 transition"
+              aria-label="ออกจากระบบ"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
+
         </div>
       </header>
 
