@@ -101,11 +101,10 @@ export default function TripTrackApp() {
     }
 
     try {
-      const savedName = localStorage.getItem("employeeName");
-      if (savedName) setEmployeeName(savedName);
       const raw = localStorage.getItem("appSettings");
       if (raw) setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(raw) });
     } catch {}
+
 
     // Load trips from Supabase
     (async () => {
