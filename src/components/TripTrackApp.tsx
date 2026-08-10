@@ -29,6 +29,7 @@ import {
 import { sendLineMessage } from "@/lib/line.functions";
 import { supabase } from "@/integrations/supabase/client";
 import logoUrl from "@/assets/engcorp-logo.png";
+import InstallPrompt from "@/components/InstallPrompt";
 
 declare global {
   interface Window {
