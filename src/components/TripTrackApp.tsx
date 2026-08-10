@@ -261,6 +261,10 @@ export default function TripTrackApp() {
         <NavButton icon={<FileText />} label="บันทึกงาน" isActive={activeTab === "form"} onClick={() => setActiveTab("form")} />
         <NavButton icon={<BarChart3 />} label="รายงาน" isActive={activeTab === "dashboard"} onClick={() => setActiveTab("dashboard")} />
         <NavButton icon={<SettingsIcon />} label="ตั้งค่า" isActive={activeTab === "settings"} onClick={() => setActiveTab("settings")} />
+        {isAdmin && (
+          <NavButton icon={<UsersIcon />} label="พนักงาน" isActive={activeTab === "employees"} onClick={() => setActiveTab("employees")} />
+        )}
+
       </nav>
     </div>
   );
