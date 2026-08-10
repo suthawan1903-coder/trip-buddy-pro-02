@@ -631,7 +631,9 @@ function FormView({
         .from("trips")
         .insert({
           trip_date: formData.date,
+          user_id: (await supabase.auth.getUser()).data.user?.id ?? null,
           employee_name: employeeName,
+
           place: formData.place,
           province: formData.prov || null,
           district: formData.dist || null,
