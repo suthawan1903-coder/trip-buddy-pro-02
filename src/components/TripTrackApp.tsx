@@ -146,10 +146,15 @@ export default function TripTrackApp() {
     setTrips((prev) => [newTrip, ...prev]);
   };
 
-  const handleNameChange = (n: string) => {
-    setEmployeeName(n);
-    localStorage.setItem("employeeName", n);
+  const handleNameChange = (_n: string) => {
+    /* ชื่อพนักงานมาจากบัญชีที่ล็อกอิน */
   };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    void navigate({ to: "/auth", replace: true });
+  };
+
 
   const saveSettings = (s: AppSettings) => {
     setSettings(s);
