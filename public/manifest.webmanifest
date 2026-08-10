@@ -1,0 +1,17 @@
+{
+  "name": "EJH Check In",
+  "short_name": "EJH Check In",
+  "description": "ระบบเช็คอินงานนอกสถานที่ พร้อม GPS คำนวณค่าเดินทาง และแจ้งเตือน LINE",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#0f172a",
+  "lang": "th",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
