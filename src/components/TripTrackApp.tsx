@@ -29,6 +29,7 @@ import {
 import { sendLineMessage } from "@/lib/line.functions";
 import { supabase } from "@/integrations/supabase/client";
 import logoUrl from "@/assets/engcorp-logo.png";
+import InstallPrompt from "@/components/InstallPrompt";
 
 declare global {
   interface Window {
@@ -186,7 +187,12 @@ export default function TripTrackApp() {
         </div>
       </header>
 
+      <div className="max-w-2xl mx-auto pt-3">
+        <InstallPrompt />
+      </div>
+
       <main className="max-w-2xl mx-auto p-4">
+
         {activeTab === "form" && (
           <FormView
             showToast={showToast}
