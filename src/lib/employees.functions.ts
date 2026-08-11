@@ -13,9 +13,11 @@ const createSchema = z.object({
   employeeCode: codeSchema,
   fullName: z.string().trim().min(2).max(80),
   phone: z.string().trim().max(30).optional(),
+  position: z.string().trim().max(60).optional(),
   password: z.string().min(6).max(72),
   role: z.enum(["admin", "employee"]),
 });
+
 
 /** true when at least one admin exists (used to gate first-time setup) */
 export const hasAdminAccount = createServerFn({ method: "GET" }).handler(async () => {
@@ -60,7 +62,9 @@ export const bootstrapAdmin = createServerFn({ method: "POST" })
       employee_code: code,
       full_name: data.fullName,
       phone: data.phone || null,
+      position: data.position || null,
     });
+
     if (pErr) {
       await supabaseAdmin.auth.admin.deleteUser(uid);
       throw new Error(pErr.message);
@@ -82,7 +86,7 @@ export const listEmployees = createServerFn({ method: "GET" })
     const [{ data: profiles, error }, { data: roles }] = await Promise.all([
       supabaseAdmin
         .from("profiles")
-        .select("id, employee_code, full_name, phone, active, created_at")
+        .select("id, employee_code, full_name, phone, position, active, created_at")
         .order("created_at", { ascending: false }),
       supabaseAdmin.from("user_roles").select("user_id, role"),
     ]);
@@ -117,7 +121,9 @@ export const createEmployee = createServerFn({ method: "POST" })
       employee_code: code,
       full_name: data.fullName,
       phone: data.phone || null,
+      position: data.position || null,
     });
+
     if (pErr) {
       await supabaseAdmin.auth.admin.deleteUser(uid);
       throw new Error(pErr.message.includes("duplicate") ? "รหัสพนักงานนี้ถูกใช้แล้ว" : pErr.message);
@@ -134,6 +140,7 @@ export const updateEmployee = createServerFn({ method: "POST" })
         id: z.string().uuid(),
         fullName: z.string().trim().min(2).max(80).optional(),
         phone: z.string().trim().max(30).optional(),
+        position: z.string().trim().max(60).optional(),
         active: z.boolean().optional(),
         password: z.string().min(6).max(72).optional(),
         role: z.enum(["admin", "employee"]).optional(),
@@ -151,13 +158,16 @@ export const updateEmployee = createServerFn({ method: "POST" })
     const patch: {
       full_name?: string;
       phone?: string | null;
+      position?: string | null;
       active?: boolean;
     } = {};
     if (data.fullName !== undefined) patch["full_name"] = data.fullName;
     if (data.phone !== undefined) patch["phone"] = data.phone || null;
+    if (data.position !== undefined) patch["position"] = data.position || null;
     if (data.active !== undefined) patch["active"] = data.active;
     if (Object.keys(patch).length > 0) {
       const { error } = await supabaseAdmin.from("profiles").update(patch).eq("id", data.id);
+
       if (error) throw new Error(error.message);
     }
     if (data.password) {

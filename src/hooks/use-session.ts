@@ -6,8 +6,10 @@ export type Profile = {
   employee_code: string;
   full_name: string;
   phone: string | null;
+  position: string | null;
   active: boolean;
 };
+
 
 export function useSession() {
   const [loading, setLoading] = useState(true);
@@ -32,7 +34,7 @@ export function useSession() {
       const [{ data: p }, { data: roles }] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, employee_code, full_name, phone, active")
+          .select("id, employee_code, full_name, phone, position, active")
           .eq("id", uid)
           .maybeSingle(),
         supabase.from("user_roles").select("role").eq("user_id", uid),

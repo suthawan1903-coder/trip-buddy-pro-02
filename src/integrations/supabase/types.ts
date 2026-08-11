@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          checkin_radius_km: number
+          created_at: string
+          fuel_efficiency: number
+          fuel_price: number
+          id: boolean
+          line_secret: string | null
+          line_token: string | null
+          rate_per_km: number
+          updated_at: string
+        }
+        Insert: {
+          checkin_radius_km?: number
+          created_at?: string
+          fuel_efficiency?: number
+          fuel_price?: number
+          id?: boolean
+          line_secret?: string | null
+          line_token?: string | null
+          rate_per_km?: number
+          updated_at?: string
+        }
+        Update: {
+          checkin_radius_km?: number
+          created_at?: string
+          fuel_efficiency?: number
+          fuel_price?: number
+          id?: boolean
+          line_secret?: string | null
+          line_token?: string | null
+          rate_per_km?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           active: boolean
@@ -22,6 +58,7 @@ export type Database = {
           full_name: string
           id: string
           phone: string | null
+          position: string | null
           updated_at: string
         }
         Insert: {
@@ -31,6 +68,7 @@ export type Database = {
           full_name: string
           id: string
           phone?: string | null
+          position?: string | null
           updated_at?: string
         }
         Update: {
@@ -40,6 +78,7 @@ export type Database = {
           full_name?: string
           id?: string
           phone?: string | null
+          position?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -50,17 +89,27 @@ export type Database = {
           created_at: string
           distance: number
           district: string | null
+          duration_min: number | null
           employee_name: string
+          employee_position: string | null
+          fuel_efficiency: number | null
+          fuel_price: number | null
           id: string
           images: Json
           job: string | null
+          job_type: string | null
+          lat: number | null
+          lng: number | null
           mode: string
           place: string
           province: string | null
+          rate_per_km: number | null
+          route_min: number | null
           status: string
           time_in: string | null
           time_out: string | null
           trip_date: string
+          updated_at: string
           user_id: string | null
           vehicle: string
         }
@@ -69,17 +118,27 @@ export type Database = {
           created_at?: string
           distance?: number
           district?: string | null
+          duration_min?: number | null
           employee_name: string
+          employee_position?: string | null
+          fuel_efficiency?: number | null
+          fuel_price?: number | null
           id?: string
           images?: Json
           job?: string | null
+          job_type?: string | null
+          lat?: number | null
+          lng?: number | null
           mode?: string
           place: string
           province?: string | null
+          rate_per_km?: number | null
+          route_min?: number | null
           status?: string
           time_in?: string | null
           time_out?: string | null
           trip_date?: string
+          updated_at?: string
           user_id?: string | null
           vehicle?: string
         }
@@ -88,17 +147,27 @@ export type Database = {
           created_at?: string
           distance?: number
           district?: string | null
+          duration_min?: number | null
           employee_name?: string
+          employee_position?: string | null
+          fuel_efficiency?: number | null
+          fuel_price?: number | null
           id?: string
           images?: Json
           job?: string | null
+          job_type?: string | null
+          lat?: number | null
+          lng?: number | null
           mode?: string
           place?: string
           province?: string | null
+          rate_per_km?: number | null
+          route_min?: number | null
           status?: string
           time_in?: string | null
           time_out?: string | null
           trip_date?: string
+          updated_at?: string
           user_id?: string | null
           vehicle?: string
         }
