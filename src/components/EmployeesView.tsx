@@ -13,6 +13,7 @@ type Row = {
   employee_code: string;
   full_name: string;
   phone: string | null;
+  position: string | null;
   active: boolean;
   role: string;
 };
@@ -37,9 +38,11 @@ export default function EmployeesView({
     employeeCode: "",
     fullName: "",
     phone: "",
+    position: "",
     password: "",
     role: "employee" as "employee" | "admin",
   });
+
 
   const reload = useCallback(async () => {
     try {
