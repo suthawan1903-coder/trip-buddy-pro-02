@@ -69,7 +69,7 @@ export default function EmployeesView({
     try {
       await addEmployee({ data: { ...form, employeeCode: form.employeeCode.trim().toLowerCase() } });
       showToast("เพิ่มพนักงานเรียบร้อย ✅");
-      setForm({ employeeCode: "", fullName: "", phone: "", password: "", role: "employee" });
+      setForm({ employeeCode: "", fullName: "", phone: "", position: "", password: "", role: "employee" });
       setOpen(false);
       await reload();
     } catch (e) {
