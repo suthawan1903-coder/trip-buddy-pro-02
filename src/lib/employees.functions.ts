@@ -62,7 +62,9 @@ export const bootstrapAdmin = createServerFn({ method: "POST" })
       employee_code: code,
       full_name: data.fullName,
       phone: data.phone || null,
+      position: data.position || null,
     });
+
     if (pErr) {
       await supabaseAdmin.auth.admin.deleteUser(uid);
       throw new Error(pErr.message);
