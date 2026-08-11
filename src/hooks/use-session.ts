@@ -6,8 +6,10 @@ export type Profile = {
   employee_code: string;
   full_name: string;
   phone: string | null;
+  position: string | null;
   active: boolean;
 };
+
 
 export function useSession() {
   const [loading, setLoading] = useState(true);
