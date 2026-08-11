@@ -157,12 +157,19 @@ export default function EmployeesView({
                 placeholder="08x-xxx-xxxx"
               />
               <Input
+                label="ตำแหน่งงาน"
+                value={form.position}
+                onChange={(v) => setForm({ ...form, position: v })}
+                placeholder="เช่น ช่างเทคนิค / เซลล์"
+              />
+              <Input
                 label="รหัสผ่านเริ่มต้น"
                 value={form.password}
                 onChange={(v) => setForm({ ...form, password: v })}
                 placeholder="อย่างน้อย 6 ตัว"
               />
             </div>
+
             <div>
               <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 block">
                 สิทธิ์การใช้งาน
