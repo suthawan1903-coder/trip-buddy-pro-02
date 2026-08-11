@@ -232,8 +232,10 @@ export default function EmployeesView({
                 </div>
                 <p className="text-[11px] text-slate-500 truncate">
                   {row.employee_code}
+                  {row.position ? ` · ${row.position}` : ""}
                   {row.phone ? ` · ${row.phone}` : ""}
                 </p>
+
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <IconBtn title="ตั้งรหัสผ่านใหม่" onClick={() => resetPassword(row)}>
