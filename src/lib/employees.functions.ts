@@ -140,6 +140,7 @@ export const updateEmployee = createServerFn({ method: "POST" })
         id: z.string().uuid(),
         fullName: z.string().trim().min(2).max(80).optional(),
         phone: z.string().trim().max(30).optional(),
+        position: z.string().trim().max(60).optional(),
         active: z.boolean().optional(),
         password: z.string().min(6).max(72).optional(),
         role: z.enum(["admin", "employee"]).optional(),
@@ -157,13 +158,16 @@ export const updateEmployee = createServerFn({ method: "POST" })
     const patch: {
       full_name?: string;
       phone?: string | null;
+      position?: string | null;
       active?: boolean;
     } = {};
     if (data.fullName !== undefined) patch["full_name"] = data.fullName;
     if (data.phone !== undefined) patch["phone"] = data.phone || null;
+    if (data.position !== undefined) patch["position"] = data.position || null;
     if (data.active !== undefined) patch["active"] = data.active;
     if (Object.keys(patch).length > 0) {
       const { error } = await supabaseAdmin.from("profiles").update(patch).eq("id", data.id);
+
       if (error) throw new Error(error.message);
     }
     if (data.password) {
