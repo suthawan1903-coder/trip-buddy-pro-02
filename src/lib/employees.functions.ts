@@ -13,9 +13,11 @@ const createSchema = z.object({
   employeeCode: codeSchema,
   fullName: z.string().trim().min(2).max(80),
   phone: z.string().trim().max(30).optional(),
+  position: z.string().trim().max(60).optional(),
   password: z.string().min(6).max(72),
   role: z.enum(["admin", "employee"]),
 });
+
 
 /** true when at least one admin exists (used to gate first-time setup) */
 export const hasAdminAccount = createServerFn({ method: "GET" }).handler(async () => {
