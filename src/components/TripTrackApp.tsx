@@ -1,20 +1,20 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
 import { useSession } from "@/hooks/use-session";
 import EmployeesView from "@/components/EmployeesView";
-import { LogOut, Users as UsersIcon } from "lucide-react";
-
+import AdminTripsView from "@/components/AdminTripsView";
 import {
+  LogOut,
+  Users as UsersIcon,
+  ShieldCheck,
   MapPin,
-  Navigation,
   Camera,
   FileText,
   BarChart3,
   Moon,
   Sun,
-  Play,
-  Square,
+  Locate,
   Car,
   Truck,
   Bike,
@@ -30,11 +30,28 @@ import {
   Fuel,
   Edit3,
   Satellite,
+  Store,
+  Loader2,
+  Globe2,
 } from "lucide-react";
 import { sendLineMessage } from "@/lib/line.functions";
+import { getAppSettings, updateAppSettings } from "@/lib/settings.functions";
 import { supabase } from "@/integrations/supabase/client";
 import logoUrl from "@/assets/engcorp-logo.png";
 import InstallPrompt from "@/components/InstallPrompt";
+import { calculateFuelCost, tryCalculateFuelCost } from "@/lib/fuel-cost";
+import {
+  fetchRoute,
+  geocodeDistrict,
+  geocodeProvince,
+  getPosition,
+  haversineKm,
+  minutesBetween,
+  formatMinutes,
+  utcDateString,
+  watchPosition,
+  type LatLng,
+} from "@/lib/geo";
 
 declare global {
   interface Window {
@@ -42,13 +59,26 @@ declare global {
   }
 }
 
-const vehicleRates: Record<string, { name: string; rate: number }> = {
-  car: { name: "รถยนต์", rate: 4.5 },
-  pickup: { name: "รถกระบะ", rate: 5.0 },
-  motorcycle: { name: "มอเตอร์ไซค์", rate: 2.0 },
+const vehicleRates: Record<string, { name: string; rate: number; kmPerLitre: number }> = {
+  car: { name: "รถยนต์", rate: 4.5, kmPerLitre: 12 },
+  pickup: { name: "รถกระบะ", rate: 5.0, kmPerLitre: 10 },
+  motorcycle: { name: "มอเตอร์ไซค์", rate: 2.0, kmPerLitre: 35 },
 };
 
-const mockCustomers = [
+const JOB_PRESETS = [
+  "ติดตั้ง",
+  "ซ่อม/แก้ไข",
+  "ตรวจเช็คระบบ",
+  "ส่งของ",
+  "เข้าพบลูกค้า",
+  "เก็บเงิน",
+  "สำรวจหน้างาน",
+  "อบรม/ประชุม",
+];
+
+type Customer = { id: string; name: string; province: string; district: string };
+
+const mockCustomers: Customer[] = [
   { id: "EHS-AR-5801-0534", name: "ร้านกันเองเทเลคอม", province: "อุดรธานี", district: "หนองหาน" },
 ];
 
@@ -62,32 +92,42 @@ type Trip = {
   dist: string | number;
   cost: string | number;
   status: string;
+  durationMin?: number | null;
+  jobType?: string | null;
+  job?: string | null;
 };
 
-type AppSettings = {
+export type AppSettings = {
   lineToken: string;
   lineSecret: string;
-  fuelPrice: number; // บาท/ลิตร
-  ratePerKm: number; // บาท/กม. (0 = ใช้ default ของรถ)
+  fuelPrice: number;
+  fuelEfficiency: number;
+  ratePerKm: number;
+  checkinRadiusKm: number;
 };
 
 const DEFAULT_SETTINGS: AppSettings = {
   lineToken: "",
   lineSecret: "",
   fuelPrice: 38,
+  fuelEfficiency: 12,
   ratePerKm: 0,
+  checkinRadiusKm: 5,
 };
 
 export default function TripTrackApp() {
   const { profile, isAdmin, userId } = useSession();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<"form" | "dashboard" | "settings" | "employees">("form");
+  const [activeTab, setActiveTab] = useState<
+    "form" | "dashboard" | "settings" | "employees" | "admin"
+  >("form");
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const loadSettings = useServerFn(getAppSettings);
+  const saveSettingsFn = useServerFn(updateAppSettings);
   const employeeName = profile?.full_name ?? "";
-
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -105,19 +145,27 @@ export default function TripTrackApp() {
       document.body.appendChild(script);
     }
 
-    try {
-      const raw = localStorage.getItem("appSettings");
-      if (raw) setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(raw) });
-    } catch {}
+    (async () => {
+      try {
+        const s = await loadSettings();
+        setSettings({ ...DEFAULT_SETTINGS, ...s });
+      } catch {
+        try {
+          const raw = localStorage.getItem("appSettings");
+          if (raw) setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(raw) });
+        } catch {
+          /* ignore */
+        }
+      }
+    })();
 
-
-    // Load trips from Supabase
     (async () => {
       const { data, error } = await supabase
         .from("trips")
         .select("*")
+        .order("trip_date", { ascending: false })
         .order("created_at", { ascending: false })
-        .limit(200);
+        .limit(300);
       if (!error && data) {
         setTrips(
           data.map((r: any) => ({
@@ -130,10 +178,14 @@ export default function TripTrackApp() {
             dist: r.distance,
             cost: r.cost,
             status: r.status,
-          }))
+            durationMin: r.duration_min,
+            jobType: r.job_type,
+            job: r.job,
+          })),
         );
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -146,24 +198,31 @@ export default function TripTrackApp() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const handleAddTrip = (newTrip: Trip) => {
-    setTrips((prev) => [newTrip, ...prev]);
-  };
-
-  const handleNameChange = (_n: string) => {
-    /* ชื่อพนักงานมาจากบัญชีที่ล็อกอิน */
-  };
+  const handleAddTrip = (newTrip: Trip) => setTrips((prev) => [newTrip, ...prev]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     void navigate({ to: "/auth", replace: true });
   };
 
-
-  const saveSettings = (s: AppSettings) => {
+  const saveSettings = async (s: AppSettings) => {
     setSettings(s);
     localStorage.setItem("appSettings", JSON.stringify(s));
-    showToast("บันทึกการตั้งค่าเรียบร้อย");
+    try {
+      await saveSettingsFn({
+        data: {
+          fuelPrice: s.fuelPrice,
+          fuelEfficiency: s.fuelEfficiency,
+          ratePerKm: s.ratePerKm,
+          checkinRadiusKm: s.checkinRadiusKm,
+          lineToken: s.lineToken,
+          lineSecret: s.lineSecret,
+        },
+      });
+      showToast("บันทึกการตั้งค่าส่วนกลางเรียบร้อย ✅");
+    } catch (e: any) {
+      showToast(e?.message || "บันทึกการตั้งค่าไม่สำเร็จ", "error");
+    }
   };
 
   return (
@@ -185,7 +244,7 @@ export default function TripTrackApp() {
                 EJH Check In
               </h1>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                ระบบบันทึกงาน & GPS
+                {profile?.position ? profile.position : "ระบบบันทึกงาน & GPS"}
               </p>
             </div>
           </div>
@@ -210,7 +269,6 @@ export default function TripTrackApp() {
               <LogOut size={18} />
             </button>
           </div>
-
         </div>
       </header>
 
@@ -219,13 +277,12 @@ export default function TripTrackApp() {
       </div>
 
       <main className="max-w-2xl mx-auto p-4">
-
         {activeTab === "form" && (
           <FormView
             showToast={showToast}
             onAddTrip={handleAddTrip}
             employeeName={employeeName}
-            onNameChange={handleNameChange}
+            employeePosition={profile?.position ?? ""}
             settings={settings}
           />
         )}
@@ -238,12 +295,17 @@ export default function TripTrackApp() {
           />
         )}
         {activeTab === "settings" && (
-          <SettingsView settings={settings} onSave={saveSettings} showToast={showToast} />
+          <SettingsView
+            settings={settings}
+            onSave={saveSettings}
+            showToast={showToast}
+            isAdmin={isAdmin}
+          />
         )}
+        {activeTab === "admin" && isAdmin && <AdminTripsView showToast={showToast} />}
         {activeTab === "employees" && isAdmin && (
           <EmployeesView showToast={showToast} currentUserId={userId} />
         )}
-
       </main>
 
       {toast && (
@@ -260,11 +322,13 @@ export default function TripTrackApp() {
       <nav className="fixed bottom-3 left-3 right-3 max-w-2xl mx-auto bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl flex z-30 shadow-2xl">
         <NavButton icon={<FileText />} label="บันทึกงาน" isActive={activeTab === "form"} onClick={() => setActiveTab("form")} />
         <NavButton icon={<BarChart3 />} label="รายงาน" isActive={activeTab === "dashboard"} onClick={() => setActiveTab("dashboard")} />
-        <NavButton icon={<SettingsIcon />} label="ตั้งค่า" isActive={activeTab === "settings"} onClick={() => setActiveTab("settings")} />
+        {isAdmin && (
+          <NavButton icon={<ShieldCheck />} label="จัดการงาน" isActive={activeTab === "admin"} onClick={() => setActiveTab("admin")} />
+        )}
         {isAdmin && (
           <NavButton icon={<UsersIcon />} label="พนักงาน" isActive={activeTab === "employees"} onClick={() => setActiveTab("employees")} />
         )}
-
+        <NavButton icon={<SettingsIcon />} label="ตั้งค่า" isActive={activeTab === "settings"} onClick={() => setActiveTab("settings")} />
       </nav>
     </div>
   );
@@ -284,65 +348,85 @@ function NavButton({
   return (
     <button
       onClick={onClick}
-      className={`flex-1 flex flex-col items-center py-3 gap-1 text-[11px] font-semibold transition rounded-2xl mx-1 my-1 ${
+      className={`flex-1 flex flex-col items-center py-3 gap-1 text-[10px] font-semibold transition rounded-2xl mx-1 my-1 ${
         isActive
           ? "text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/50"
           : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
       }`}
     >
-      {React.cloneElement(icon as React.ReactElement<any>, { size: 22 })}
+      {React.cloneElement(icon as React.ReactElement<any>, { size: 20 })}
       <span>{label}</span>
     </button>
   );
 }
 
+/* ================================================================== */
+/* FORM                                                               */
+/* ================================================================== */
+
 function FormView({
   showToast,
   onAddTrip,
   employeeName,
-  onNameChange,
+  employeePosition,
   settings,
 }: {
   showToast: (m: string, t?: string) => void;
   onAddTrip: (t: Trip) => void;
   employeeName: string;
-  onNameChange: (n: string) => void;
+  employeePosition: string;
   settings: AppSettings;
 }) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const [mapInstance, setMapInstance] = useState<any>(null);
-  const [isTracking, setIsTracking] = useState(false);
-  const [distance, setDistance] = useState<number | string>(0);
+  const [gpsStatus, setGpsStatus] = useState<"idle" | "locating" | "ready" | "error">("idle");
+  const [accuracy, setAccuracy] = useState<number | null>(null);
+  const [distance, setDistance] = useState<number>(0);
+  const [routeMin, setRouteMin] = useState<number | null>(null);
   const [manualDistance, setManualDistance] = useState<string>("");
   const [manualCost, setManualCost] = useState<string>("");
   const [trackingMode, setTrackingMode] = useState<"gps" | "manual">("gps");
-  const [startPoint, setStartPoint] = useState<[number, number] | null>(null);
-  const [destPoint, setDestPoint] = useState<[number, number] | null>(null);
+  const [startPoint, setStartPoint] = useState<LatLng | null>(null);
+  const [destPoint, setDestPoint] = useState<LatLng | null>(null);
   const [vehicle, setVehicle] = useState<"car" | "pickup" | "motorcycle">("car");
   const [saving, setSaving] = useState(false);
+  const [nearby, setNearby] = useState<{ c: Customer; km: number }[]>([]);
+  const [scanningNearby, setScanningNearby] = useState(false);
   const routeLayerRef = useRef<any>(null);
   const startMarkerRef = useRef<any>(null);
   const destMarkerRef = useRef<any>(null);
+  const radiusLayerRef = useRef<any>(null);
 
   const [formData, setFormData] = useState({
-    date: new Date().toISOString().split("T")[0],
+    date: utcDateString(),
     prov: "",
     dist: "",
     place: "",
     timeIn: "",
     timeOut: "",
+    jobType: "",
     job: "",
     images: [] as string[],
   });
 
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [customers, setCustomers] = useState(mockCustomers);
+  const [customers, setCustomers] = useState<Customer[]>(mockCustomers);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
 
-  // Effective rate per km
-  const effectiveRate = settings.ratePerKm > 0 ? settings.ratePerKm : vehicleRates[vehicle].rate;
+  const efficiency = settings.fuelEfficiency > 0 ? settings.fuelEfficiency : vehicleRates[vehicle].kmPerLitre;
 
+  /* --- automatic date from universal time (UTC), refreshed every minute --- */
+  useEffect(() => {
+    const tick = () =>
+      setFormData((prev) =>
+        prev.date === utcDateString() ? prev : { ...prev, date: utcDateString() },
+      );
+    const id = setInterval(tick, 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  /* ------------------------- customers from sheet ------------------------ */
   useEffect(() => {
     const fetchCustomersFromSheet = async () => {
       setIsLoadingCustomers(true);
@@ -353,7 +437,7 @@ function FormView({
         if (!response.ok) throw new Error("โหลดข้อมูลไม่สำเร็จ");
         const csvText = await response.text();
         const rows = csvText.split("\n");
-        const newCustomers: typeof mockCustomers = [];
+        const newCustomers: Customer[] = [];
         let nameCol = 2,
           distCol = 12,
           provCol = 14,
@@ -388,109 +472,181 @@ function FormView({
         }
         if (newCustomers.length > 0) setCustomers(newCustomers);
       } catch {
-        // fallback
+        /* keep fallback */
       } finally {
         setIsLoadingCustomers(false);
       }
     };
-    fetchCustomersFromSheet();
+    void fetchCustomersFromSheet();
   }, []);
 
+  /* ------------------------------ map init ------------------------------ */
   useEffect(() => {
     if (trackingMode !== "gps") return;
     if (!mapRef.current || mapInstance) return;
     let cancelled = false;
     const initMap = async () => {
       let attempts = 0;
-      while (!window.L && attempts < 20) {
+      while (!window.L && attempts < 30) {
         await new Promise((r) => setTimeout(r, 300));
         attempts++;
       }
-      if (cancelled) return;
-      if (window.L && mapRef.current && !mapInstance) {
-        const map = window.L.map(mapRef.current).setView([17.4138, 102.7872], 13);
-        window.L
-          .tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-            attribution: "© OpenStreetMap",
-          })
-          .addTo(map);
-        setMapInstance(map);
-      }
+      if (cancelled || !window.L || !mapRef.current) return;
+      const map = window.L.map(mapRef.current).setView([13.7563, 100.5018], 12);
+      window.L
+        .tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: "© OpenStreetMap",
+        })
+        .addTo(map);
+      setMapInstance(map);
     };
-    initMap();
+    void initMap();
     return () => {
       cancelled = true;
     };
   }, [mapInstance, trackingMode]);
 
+  /* --------------------- auto GPS (Android/iOS friendly) ------------------ */
   useEffect(() => {
-    if (trackingMode !== "gps") return;
-    if (mapInstance && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const latlng: [number, number] = [pos.coords.latitude, pos.coords.longitude];
-          setStartPoint(latlng);
-          setIsTracking(true);
-          showToast("📍 ดึงตำแหน่ง GPS ของคุณอัตโนมัติแล้ว!");
-          if (window.L) {
-            if (startMarkerRef.current) mapInstance.removeLayer(startMarkerRef.current);
-            startMarkerRef.current = window.L
-              .marker(latlng)
-              .addTo(mapInstance)
-              .bindPopup("จุดเริ่มต้นของคุณ")
-              .openPopup();
-            mapInstance.setView(latlng, 15);
-          }
-        },
-        () => console.warn("GPS Auto-fetch denied")
-      );
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapInstance, trackingMode]);
+    let stopped = false;
+    setGpsStatus("locating");
+    getPosition()
+      .then((pos) => {
+        if (stopped) return;
+        setStartPoint([pos.coords.latitude, pos.coords.longitude]);
+        setAccuracy(pos.coords.accuracy);
+        setGpsStatus("ready");
+      })
+      .catch(() => {
+        if (!stopped) setGpsStatus("error");
+      });
+    const stopWatch = watchPosition(
+      (p, acc) => {
+        setStartPoint(p);
+        setAccuracy(acc);
+        setGpsStatus("ready");
+      },
+      () => setGpsStatus((s) => (s === "ready" ? s : "error")),
+    );
+    return () => {
+      stopped = true;
+      stopWatch();
+    };
+  }, []);
 
-  const calculateRouteTo = async (
-    destLat: number,
-    destLng: number,
-    currentStartPoint: [number, number] | null = startPoint
-  ) => {
-    if (!currentStartPoint || !mapInstance || !window.L) return;
-    try {
-      const url = `https://router.project-osrm.org/route/v1/driving/${currentStartPoint[1]},${currentStartPoint[0]};${destLng},${destLat}?overview=full&geometries=geojson`;
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.routes && data.routes[0]) {
-        const routeInfo = data.routes[0];
-        const distKm = (routeInfo.distance / 1000).toFixed(2);
-        setDistance(distKm);
-        if (routeLayerRef.current) mapInstance.removeLayer(routeLayerRef.current);
-        const latlngs = routeInfo.geometry.coordinates.map((c: number[]) => [c[1], c[0]]);
-        routeLayerRef.current = window.L
-          .polyline(latlngs, { color: "#3b82f6", weight: 5, opacity: 0.8 })
-          .addTo(mapInstance);
-        mapInstance.fitBounds(routeLayerRef.current.getBounds(), { padding: [50, 50] });
+  /* --------------- draw my marker + radius circle on the map -------------- */
+  useEffect(() => {
+    if (!mapInstance || !window.L || !startPoint) return;
+    if (startMarkerRef.current) mapInstance.removeLayer(startMarkerRef.current);
+    startMarkerRef.current = window.L
+      .marker(startPoint)
+      .addTo(mapInstance)
+      .bindPopup("ตำแหน่งของคุณ");
+    if (radiusLayerRef.current) mapInstance.removeLayer(radiusLayerRef.current);
+    radiusLayerRef.current = window.L
+      .circle(startPoint, {
+        radius: settings.checkinRadiusKm * 1000,
+        color: "#2563eb",
+        weight: 1,
+        fillOpacity: 0.06,
+      })
+      .addTo(mapInstance);
+    if (!destPoint) mapInstance.setView(startPoint, 14);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapInstance, startPoint, settings.checkinRadiusKm]);
+
+  /* ----------- auto list of stores within the check-in radius ------------- */
+  useEffect(() => {
+    if (!startPoint || customers.length === 0) return;
+    let cancelled = false;
+    const scan = async () => {
+      setScanningNearby(true);
+      const provinces = Array.from(new Set(customers.map((c) => c.province).filter(Boolean)));
+      const nearProvinces: string[] = [];
+      for (const p of provinces) {
+        if (cancelled) return;
+        const point = await geocodeProvince(p);
+        if (point && haversineKm(startPoint, point) < 200) nearProvinces.push(p);
       }
-    } catch {
-      showToast("คำนวณเส้นทางถนนจริงล้มเหลว", "error");
+      const districtKeys = Array.from(
+        new Set(
+          customers
+            .filter((c) => nearProvinces.includes(c.province))
+            .map((c) => `${c.province}|${c.district}`),
+        ),
+      ).slice(0, 60);
+
+      const found: { c: Customer; km: number }[] = [];
+      for (const key of districtKeys) {
+        if (cancelled) return;
+        const [prov, dist] = key.split("|");
+        const point = await geocodeDistrict(dist, prov);
+        if (!point) continue;
+        const km = haversineKm(startPoint, point);
+        if (km <= settings.checkinRadiusKm) {
+          customers
+            .filter((c) => c.province === prov && c.district === dist)
+            .forEach((c) => found.push({ c, km: Math.round(km * 100) / 100 }));
+          if (!cancelled) setNearby([...found].sort((a, b) => a.km - b.km));
+        }
+      }
+      if (!cancelled) {
+        setNearby(found.sort((a, b) => a.km - b.km));
+        setScanningNearby(false);
+      }
+    };
+    void scan();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startPoint === null, customers.length, settings.checkinRadiusKm]);
+
+  /* ------------------------------- routing -------------------------------- */
+  const drawRoute = async (dest: LatLng, from: LatLng | null = startPoint) => {
+    if (!from) return;
+    const route = await fetchRoute(from, dest);
+    if (!route) {
+      const straight = haversineKm(from, dest);
+      setDistance(Math.round(straight * 1.3 * 100) / 100);
+      setRouteMin(Math.round((straight * 1.3) / 50 * 60));
+      showToast("ใช้ระยะทางประมาณการ (เส้นทางจริงเรียกไม่ได้)", "error");
+      return;
+    }
+    setDistance(route.distanceKm);
+    setRouteMin(route.durationMin);
+    if (mapInstance && window.L) {
+      if (routeLayerRef.current) mapInstance.removeLayer(routeLayerRef.current);
+      routeLayerRef.current = window.L
+        .polyline(route.coordinates, { color: "#3b82f6", weight: 5, opacity: 0.85 })
+        .addTo(mapInstance);
+      try {
+        mapInstance.fitBounds(routeLayerRef.current.getBounds(), { padding: [40, 40] });
+      } catch {
+        /* ignore */
+      }
     }
   };
 
-  const findStoreLocation = async (dist: string, prov: string) => {
-    if (!dist || !prov || trackingMode !== "gps") return;
-    try {
-      showToast(`กำลังหาพิกัด อ.${dist} จ.${prov}...`);
-      const query = `อำเภอ${dist}, จังหวัด${prov}, ประเทศไทย`;
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`
-      );
-      const data = await res.json();
-      if (data && data.length > 0) {
-        const lat = parseFloat(data[0].lat);
-        const lon = parseFloat(data[0].lon);
-        const destination: [number, number] = [lat, lon];
-        setDestPoint(destination);
-        if (mapInstance && window.L) {
-          if (destMarkerRef.current) mapInstance.removeLayer(destMarkerRef.current);
-          const redIcon = new window.L.Icon({
+  const selectCustomer = async (c: Customer) => {
+    setFormData((prev) => {
+      const next = { ...prev, place: c.name, prov: c.province, dist: c.district };
+      saveDraftToLocal(next);
+      return next;
+    });
+    setShowSuggestions(false);
+    if (trackingMode !== "gps") return;
+    const point = await geocodeDistrict(c.district, c.province);
+    if (!point) {
+      showToast(`ไม่พบพิกัด อ.${c.district}`, "error");
+      return;
+    }
+    setDestPoint(point);
+    if (mapInstance && window.L) {
+      if (destMarkerRef.current) mapInstance.removeLayer(destMarkerRef.current);
+      destMarkerRef.current = window.L
+        .marker(point, {
+          icon: new window.L.Icon({
             iconUrl:
               "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png",
             shadowUrl:
@@ -499,58 +655,52 @@ function FormView({
             iconAnchor: [12, 41],
             popupAnchor: [1, -34],
             shadowSize: [41, 41],
-          });
-          destMarkerRef.current = window.L
-            .marker(destination, { icon: redIcon })
-            .addTo(mapInstance)
-            .bindPopup(`📍 ร้านปลายทาง (อ.${dist}, จ.${prov})`)
-            .openPopup();
-          mapInstance.setView(destination, 13);
-          if (startPoint) calculateRouteTo(lat, lon, startPoint);
-        }
-      } else {
-        showToast(`ไม่พบพิกัด อ.${dist} ในระบบแผนที่`, "error");
-      }
-    } catch {
-      showToast("ระบบค้นหาพิกัดมีปัญหา", "error");
+          }),
+        })
+        .addTo(mapInstance)
+        .bindPopup(`📍 ${c.name}`)
+        .openPopup();
+    }
+    await drawRoute(point);
+  };
+
+  const refreshGps = async () => {
+    setGpsStatus("locating");
+    try {
+      const pos = await getPosition();
+      const p: LatLng = [pos.coords.latitude, pos.coords.longitude];
+      setStartPoint(p);
+      setAccuracy(pos.coords.accuracy);
+      setGpsStatus("ready");
+      showToast("อัปเดตตำแหน่ง GPS แล้ว 📍");
+      if (destPoint) await drawRoute(destPoint, p);
+    } catch (e: any) {
+      setGpsStatus("error");
+      showToast(e?.message || "เปิด GPS ไม่สำเร็จ กรุณาอนุญาตการเข้าถึงตำแหน่ง", "error");
     }
   };
 
-  const toggleTracking = () => {
-    if (!isTracking) {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            const latlng: [number, number] = [pos.coords.latitude, pos.coords.longitude];
-            setStartPoint(latlng);
-            setIsTracking(true);
-            if (mapInstance && window.L) {
-              if (startMarkerRef.current) mapInstance.removeLayer(startMarkerRef.current);
-              startMarkerRef.current = window.L
-                .marker(latlng)
-                .addTo(mapInstance)
-                .bindPopup("จุดเริ่มต้นของคุณ")
-                .openPopup();
-              if (destPoint) calculateRouteTo(destPoint[0], destPoint[1], latlng);
-              else mapInstance.setView(latlng, 15);
-            }
-          },
-          () => showToast("กรุณาเปิด GPS ด้วยนะเพื่อน", "error")
-        );
-      } else showToast("Browser ไม่รองรับ GPS", "error");
-    } else {
-      setIsTracking(false);
-      showToast("จบการเดินทางเรียบร้อย");
-    }
-  };
-
-  // Compute final dist/cost based on mode
+  /* ------------------------------ cost calc ------------------------------- */
   const finalDistance =
-    trackingMode === "manual" ? parseFloat(manualDistance || "0") : parseFloat(distance.toString() || "0");
+    trackingMode === "manual" ? parseFloat(manualDistance || "0") || 0 : distance;
+
+  const costResult = useMemo(
+    () =>
+      tryCalculateFuelCost({
+        distanceKm: finalDistance,
+        fuelEfficiency: efficiency,
+        fuelPrice: settings.fuelPrice,
+        ratePerKm: settings.ratePerKm,
+      }),
+    [finalDistance, efficiency, settings.fuelPrice, settings.ratePerKm],
+  );
+
+  const autoCost = costResult.ok ? costResult.data.fuelCost : 0;
+  const litres = costResult.ok ? costResult.data.litresUsed : 0;
   const finalCost =
-    trackingMode === "manual" && manualCost
-      ? parseFloat(manualCost)
-      : parseFloat((finalDistance * effectiveRate).toFixed(2));
+    trackingMode === "manual" && manualCost ? parseFloat(manualCost) || 0 : autoCost;
+
+  const workMinutes = minutesBetween(formData.timeIn, formData.timeOut);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -564,14 +714,12 @@ function FormView({
 
   const displaySuggestions = customers.filter((c) => {
     const matchProv = !formData.prov || c.province === formData.prov;
-    const matchDist = !formData.dist || c.district === formData.dist;
     const matchSearch = c.name.toLowerCase().includes(formData.place.toLowerCase());
-    return matchProv && matchDist && matchSearch;
+    return matchProv && matchSearch;
   });
 
   const saveDraftToLocal = (data: typeof formData) => {
-    const draft = { ...data, images: [] };
-    localStorage.setItem("tripDraft", JSON.stringify(draft));
+    localStorage.setItem("tripDraft", JSON.stringify({ ...data, images: [] }));
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -584,23 +732,19 @@ function FormView({
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
     files.forEach((file) => {
       const reader = new FileReader();
-      reader.onloadend = () => {
+      reader.onloadend = () =>
         setFormData((prev) => ({ ...prev, images: [...prev.images, reader.result as string] }));
-      };
       reader.readAsDataURL(file);
     });
   };
 
-  const handleRemoveImage = (idx: number) => {
+  const handleRemoveImage = (idx: number) =>
     setFormData((prev) => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }));
-  };
 
   const handleTimeStamp = (field: "timeIn" | "timeOut") => {
-    const now = new Date();
-    const timeString = now.toLocaleTimeString("th-TH", {
+    const timeString = new Date().toLocaleTimeString("th-TH", {
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
@@ -608,22 +752,12 @@ function FormView({
     const newData = { ...formData, [field]: timeString };
     setFormData(newData);
     saveDraftToLocal(newData);
-    showToast(`บันทึกเวลา${field === "timeIn" ? "เข้า" : "ออก"}สำเร็จ: ${timeString}`);
+    showToast(`บันทึกเวลา${field === "timeIn" ? "เข้า" : "ออก"}: ${timeString}`);
   };
 
   const handleSave = async () => {
-    if (!employeeName.trim()) {
-      showToast("อย่าลืมกรอกชื่อ-นามสกุล ก่อนเซฟนะเพื่อน!", "error");
-      return;
-    }
-    if (!formData.place) {
-      showToast("เลือกร้านค้าก่อนนะเพื่อน!", "error");
-      return;
-    }
-    if (finalDistance <= 0) {
-      showToast("กรุณาระบุระยะทาง (>0 km)", "error");
-      return;
-    }
+    if (!formData.place) return showToast("เลือกร้านค้าก่อนนะ!", "error");
+    if (finalDistance <= 0) return showToast("กรุณาระบุระยะทาง (>0 กม.)", "error");
 
     setSaving(true);
     try {
@@ -633,7 +767,7 @@ function FormView({
           trip_date: formData.date,
           user_id: (await supabase.auth.getUser()).data.user?.id ?? null,
           employee_name: employeeName,
-
+          employee_position: employeePosition || null,
           place: formData.place,
           province: formData.prov || null,
           district: formData.dist || null,
@@ -644,8 +778,16 @@ function FormView({
           vehicle,
           mode: trackingMode,
           job: formData.job || null,
+          job_type: formData.jobType || null,
           images: formData.images,
           status: "รออนุมัติ",
+          lat: destPoint?.[0] ?? startPoint?.[0] ?? null,
+          lng: destPoint?.[1] ?? startPoint?.[1] ?? null,
+          duration_min: workMinutes,
+          route_min: routeMin,
+          fuel_price: settings.fuelPrice,
+          fuel_efficiency: efficiency,
+          rate_per_km: settings.ratePerKm,
         })
         .select()
         .single();
@@ -662,6 +804,9 @@ function FormView({
         dist: data.distance,
         cost: data.cost,
         status: data.status,
+        durationMin: data.duration_min,
+        jobType: data.job_type,
+        job: data.job,
       });
       showToast("บันทึกขึ้นฐานข้อมูลเรียบร้อย ✅");
       localStorage.removeItem("tripDraft");
@@ -672,19 +817,18 @@ function FormView({
         prov: "",
         dist: "",
         job: "",
+        jobType: "",
         timeIn: "",
         timeOut: "",
         images: [],
       }));
       setDistance(0);
+      setRouteMin(null);
       setManualDistance("");
       setManualCost("");
-      setStartPoint(null);
       setDestPoint(null);
-      setIsTracking(false);
       if (routeLayerRef.current && mapInstance) mapInstance.removeLayer(routeLayerRef.current);
       if (destMarkerRef.current && mapInstance) mapInstance.removeLayer(destMarkerRef.current);
-      if (startMarkerRef.current && mapInstance) mapInstance.removeLayer(startMarkerRef.current);
     } catch (e: any) {
       showToast(`บันทึกล้มเหลว: ${e?.message || "unknown"}`, "error");
     } finally {
@@ -696,8 +840,10 @@ function FormView({
     const draft = localStorage.getItem("tripDraft");
     if (draft) {
       try {
-        setFormData((prev) => ({ ...prev, ...JSON.parse(draft) }));
-      } catch {}
+        setFormData((prev) => ({ ...prev, ...JSON.parse(draft), date: utcDateString() }));
+      } catch {
+        /* ignore */
+      }
     }
   }, []);
 
@@ -729,93 +875,104 @@ function FormView({
         </div>
       </div>
 
-      {/* MAP & TRACKING (GPS mode only) */}
       {trackingMode === "gps" && (
         <>
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
             <div ref={mapRef} className="w-full h-64 bg-gray-200 dark:bg-gray-700" />
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 space-y-3">
+          {/* NEARBY STORES */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="font-bold flex items-center gap-2">
-                <MapPin size={18} className="text-blue-600" />
-                ระบบจับพิกัดเดินทาง
+              <h2 className="font-bold flex items-center gap-2 text-sm">
+                <Store size={18} className="text-blue-600" />
+                ร้านที่ต้องเช็คอินในรัศมี {settings.checkinRadiusKm} กม.
               </h2>
-              <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1 gap-1">
-                <button
-                  onClick={() => setVehicle("motorcycle")}
-                  className={`p-2 rounded ${vehicle === "motorcycle" ? "bg-white dark:bg-gray-600 shadow" : ""}`}
-                  aria-label="motorcycle"
-                >
-                  <Bike size={18} />
-                </button>
-                <button
-                  onClick={() => setVehicle("car")}
-                  className={`p-2 rounded ${vehicle === "car" ? "bg-white dark:bg-gray-600 shadow" : ""}`}
-                  aria-label="car"
-                >
-                  <Car size={18} />
-                </button>
-                <button
-                  onClick={() => setVehicle("pickup")}
-                  className={`p-2 rounded ${vehicle === "pickup" ? "bg-white dark:bg-gray-600 shadow" : ""}`}
-                  aria-label="pickup"
-                >
-                  <Truck size={18} />
-                </button>
-              </div>
+              <button
+                onClick={refreshGps}
+                className="h-9 px-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-xs font-bold flex items-center gap-1"
+              >
+                <Locate size={14} /> รีเฟรช GPS
+              </button>
             </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-xl">
-                <p className="text-xs text-gray-600 dark:text-gray-300">ระยะทางจริง</p>
-                <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
-                  {finalDistance.toFixed(2)} km
-                </p>
-              </div>
-              <div className="bg-green-50 dark:bg-green-900/30 p-3 rounded-xl">
-                <p className="text-xs text-gray-600 dark:text-gray-300">
-                  ค่าเดินทาง (฿{effectiveRate}/km)
-                </p>
-                <p className="text-2xl font-bold text-green-700 dark:text-green-300">
-                  ฿{finalCost.toFixed(2)}
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={toggleTracking}
-              className={`w-full py-3 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition ${
-                isTracking ? "bg-red-500 hover:bg-red-600" : "bg-blue-600 hover:bg-blue-700"
-              }`}
-            >
-              {isTracking ? (
+            <p className="text-[11px] text-slate-500 flex items-center gap-1.5">
+              {gpsStatus === "ready" ? (
                 <>
-                  <Square size={18} /> จบการเดินทาง
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                  GPS พร้อมใช้งาน (ความแม่นยำ ±{Math.round(accuracy ?? 0)} ม.)
+                </>
+              ) : gpsStatus === "locating" ? (
+                <>
+                  <Loader2 size={12} className="animate-spin" /> กำลังเปิด GPS อัตโนมัติ...
                 </>
               ) : (
                 <>
-                  <Play size={18} /> รีเฟรชตำแหน่ง GPS ใหม่
+                  <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
+                  ยังไม่ได้รับตำแหน่ง — กรุณาอนุญาตการเข้าถึงตำแหน่งในเบราว์เซอร์
                 </>
               )}
-            </button>
+            </p>
+
+            {scanningNearby && (
+              <p className="text-[11px] text-blue-600 flex items-center gap-1">
+                <Loader2 size={12} className="animate-spin" /> กำลังค้นหาร้านใกล้คุณ...
+              </p>
+            )}
+
+            <div className="space-y-2 max-h-56 overflow-y-auto">
+              {nearby.slice(0, 30).map(({ c, km }, i) => (
+                <button
+                  key={`${c.id}-${i}`}
+                  onClick={() => selectCustomer(c)}
+                  className={`w-full text-left p-3 rounded-xl border transition ${
+                    formData.place === c.name
+                      ? "border-blue-500 bg-blue-50 dark:bg-blue-950/40"
+                      : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/40"
+                  }`}
+                >
+                  <p className="text-sm font-semibold truncate">{c.name}</p>
+                  <p className="text-[11px] text-slate-500">
+                    อ.{c.district} จ.{c.province} · ห่าง ~{km.toFixed(2)} กม.
+                  </p>
+                </button>
+              ))}
+              {!scanningNearby && nearby.length === 0 && (
+                <p className="text-[11px] text-slate-400 py-2">
+                  ยังไม่พบร้านในรัศมี {settings.checkinRadiusKm} กม. — เลือกร้านจากช่องค้นหาด้านล่างได้เลย
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold flex items-center gap-2">
+                <MapPin size={18} className="text-blue-600" /> สรุปการเดินทาง
+              </h2>
+              <VehiclePicker vehicle={vehicle} setVehicle={setVehicle} />
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <Metric label="ระยะทางจริง" value={`${finalDistance.toFixed(2)} km`} tone="blue" />
+              <Metric label="เวลาเดินทาง" value={formatMinutes(routeMin)} tone="amber" />
+              <Metric label="ค่าเดินทาง" value={`฿${finalCost.toFixed(2)}`} tone="green" />
+            </div>
+            <p className="text-[11px] text-slate-500">
+              สูตรสากล: (ระยะทาง ÷ {efficiency} กม./ลิตร) × ฿{settings.fuelPrice}/ลิตร ={" "}
+              {litres.toFixed(2)} ลิตร
+              {settings.ratePerKm > 0 && ` · ใช้เรทเหมา ฿${settings.ratePerKm}/กม.`}
+            </p>
           </div>
         </>
       )}
 
-      {/* MANUAL ENTRY */}
       {trackingMode === "manual" && (
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="font-bold flex items-center gap-2">
               <Edit3 size={18} className="text-indigo-600" /> กรอกระยะทาง/ค่าเดินทางเอง
             </h2>
-            <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1 gap-1">
-              <button onClick={() => setVehicle("motorcycle")} className={`p-2 rounded ${vehicle === "motorcycle" ? "bg-white dark:bg-gray-600 shadow" : ""}`}><Bike size={18} /></button>
-              <button onClick={() => setVehicle("car")} className={`p-2 rounded ${vehicle === "car" ? "bg-white dark:bg-gray-600 shadow" : ""}`}><Car size={18} /></button>
-              <button onClick={() => setVehicle("pickup")} className={`p-2 rounded ${vehicle === "pickup" ? "bg-white dark:bg-gray-600 shadow" : ""}`}><Truck size={18} /></button>
-            </div>
+            <VehiclePicker vehicle={vehicle} setVehicle={setVehicle} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -843,7 +1000,7 @@ function FormView({
                 inputMode="decimal"
                 value={manualCost}
                 onChange={(e) => setManualCost(e.target.value)}
-                placeholder={`คำนวณ: ฿${(parseFloat(manualDistance || "0") * effectiveRate).toFixed(2)}`}
+                placeholder={`คำนวณ: ฿${autoCost.toFixed(2)}`}
                 className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-indigo-500 text-lg font-bold"
               />
             </div>
@@ -856,12 +1013,14 @@ function FormView({
                 {finalDistance.toFixed(2)} km · ฿{finalCost.toFixed(2)}
               </p>
             </div>
-            <span className="text-[11px] text-slate-500">เรท ฿{effectiveRate}/km</span>
+            <span className="text-[11px] text-slate-500">
+              {settings.ratePerKm > 0 ? `฿${settings.ratePerKm}/km` : `${efficiency} km/L`}
+            </span>
           </div>
         </div>
       )}
 
-      {/* FORM SECTION */}
+      {/* FORM */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-bold">บันทึกข้อมูลการปฏิบัติงาน</h2>
@@ -871,36 +1030,45 @@ function FormView({
         </div>
 
         <div className="space-y-3">
-          <div>
-            <label className="text-sm font-medium block mb-1">👤 ชื่อ-นามสกุลพนักงาน</label>
-            <input
-              type="text"
-              value={employeeName}
-              onChange={(e) => onNameChange(e.target.value)}
-              placeholder="เช่น สมชาย สายซิ่ง (กรอกครั้งเดียวระบบจำเลย!)"
-              className="w-full p-3 rounded-lg border dark:border-gray-600 bg-white dark:bg-gray-800 focus:ring-2 ring-blue-500 outline-none"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm font-medium block mb-1">👤 พนักงาน</label>
+              <input
+                readOnly
+                value={employeeName}
+                className="w-full p-3 rounded-lg border dark:border-gray-600 bg-slate-100 dark:bg-slate-700/50"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium block mb-1">🏷 ตำแหน่ง</label>
+              <input
+                readOnly
+                value={employeePosition || "ยังไม่ระบุ (แอดมินตั้งค่าได้)"}
+                className="w-full p-3 rounded-lg border dark:border-gray-600 bg-slate-100 dark:bg-slate-700/50 text-sm"
+              />
+            </div>
           </div>
 
           <div>
-            <label className="text-sm font-medium block mb-1">วันที่เดินทาง</label>
+            <label className="text-sm font-medium mb-1 flex items-center gap-1">
+              <Globe2 size={14} /> วันที่ (อัตโนมัติตามเวลาสากล UTC)
+            </label>
             <input
               type="date"
               name="date"
+              readOnly
               value={formData.date}
-              onChange={handleChange}
-              className="w-full p-3 rounded-lg border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full p-3 rounded-lg border dark:border-gray-600 bg-slate-100 dark:bg-slate-700/50"
             />
           </div>
 
           <div className="relative" ref={dropdownRef}>
             <label className="text-sm font-medium block mb-1">
               สถานที่ / ร้านค้า{" "}
-              {isLoadingCustomers && (
-                <span className="text-xs text-blue-600">(กำลังดูดข้อมูลจาก Sheet...)</span>
-              )}
-              {!isLoadingCustomers && (
-                <span className="text-xs text-green-600">✅ มีข้อมูล {customers.length} ร้าน</span>
+              {isLoadingCustomers ? (
+                <span className="text-xs text-blue-600">(กำลังเชื่อมข้อมูลรายชื่อร้าน...)</span>
+              ) : (
+                <span className="text-xs text-green-600">✅ เชื่อมแล้ว {customers.length} ร้าน</span>
               )}
             </label>
             <input
@@ -922,15 +1090,7 @@ function FormView({
                   <button
                     type="button"
                     key={`${c.id}-${idx}`}
-                    onClick={() => {
-                      setFormData((prev) => {
-                        const newData = { ...prev, place: c.name, prov: c.province, dist: c.district };
-                        saveDraftToLocal(newData);
-                        return newData;
-                      });
-                      setShowSuggestions(false);
-                      findStoreLocation(c.district, c.province);
-                    }}
+                    onClick={() => void selectCustomer(c)}
                     className="w-full text-left p-3 hover:bg-blue-50 dark:hover:bg-gray-700 border-b dark:border-gray-700 last:border-0"
                   >
                     <p className="font-medium text-sm">{c.name}</p>
@@ -972,7 +1132,7 @@ function FormView({
               <label className="text-sm font-medium block mb-1">เวลาเข้า (Check-in)</label>
               <button
                 onClick={() => handleTimeStamp("timeIn")}
-                className="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-800/60 p-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition active:scale-95"
+                className="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 p-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition active:scale-95"
               >
                 <Clock size={16} /> กดเช็คอิน
               </button>
@@ -982,7 +1142,7 @@ function FormView({
               <label className="text-sm font-medium block mb-1">เวลาออก (Check-out)</label>
               <button
                 onClick={() => handleTimeStamp("timeOut")}
-                className="w-full bg-orange-100 hover:bg-orange-200 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 dark:hover:bg-orange-800/60 p-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition active:scale-95"
+                className="w-full bg-orange-100 hover:bg-orange-200 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 p-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition active:scale-95"
               >
                 <Clock size={16} /> กดเช็คเอาท์
               </button>
@@ -990,14 +1150,44 @@ function FormView({
             </div>
           </div>
 
+          {workMinutes !== null && (
+            <p className="text-xs text-center font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/50 rounded-xl py-2">
+              ⏱ ระยะเวลาปฏิบัติงานจริง: {formatMinutes(workMinutes)}
+            </p>
+          )}
+
           <div>
-            <label className="text-sm font-medium block mb-1">รายละเอียดงานที่ทำ</label>
+            <label className="text-sm font-medium block mb-1">ประเภทงาน (เลือกด่วน)</label>
+            <div className="flex flex-wrap gap-2">
+              {JOB_PRESETS.map((j) => (
+                <button
+                  key={j}
+                  type="button"
+                  onClick={() => {
+                    const next = { ...formData, jobType: formData.jobType === j ? "" : j };
+                    setFormData(next);
+                    saveDraftToLocal(next);
+                  }}
+                  className={`h-9 px-3 rounded-xl text-xs font-bold transition ${
+                    formData.jobType === j
+                      ? "bg-blue-600 text-white shadow"
+                      : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+                  }`}
+                >
+                  {j}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium block mb-1">รายละเอียดงานเพิ่มเติม</label>
             <textarea
               name="job"
               value={formData.job}
               onChange={handleChange}
               rows={3}
-              placeholder="เช่น ติดตั้ง / ซ่อม / ส่งของ ..."
+              placeholder="อธิบายงานที่ทำ เช่น เปลี่ยนอุปกรณ์ 2 จุด ..."
               className="w-full p-3 rounded-lg border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -1019,7 +1209,7 @@ function FormView({
                     <img src={imgSrc} alt={`upload-${index}`} className="w-full h-full object-cover rounded-lg" />
                     <button
                       onClick={() => handleRemoveImage(index)}
-                      className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-90 hover:opacity-100 hover:scale-110 transition shadow-md"
+                      className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 shadow-md"
                       aria-label="remove image"
                     >
                       <X size={12} />
@@ -1044,6 +1234,58 @@ function FormView({
   );
 }
 
+function VehiclePicker({
+  vehicle,
+  setVehicle,
+}: {
+  vehicle: "car" | "pickup" | "motorcycle";
+  setVehicle: (v: "car" | "pickup" | "motorcycle") => void;
+}) {
+  return (
+    <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1 gap-1">
+      <button
+        onClick={() => setVehicle("motorcycle")}
+        className={`p-2 rounded ${vehicle === "motorcycle" ? "bg-white dark:bg-gray-600 shadow" : ""}`}
+        aria-label="motorcycle"
+      >
+        <Bike size={18} />
+      </button>
+      <button
+        onClick={() => setVehicle("car")}
+        className={`p-2 rounded ${vehicle === "car" ? "bg-white dark:bg-gray-600 shadow" : ""}`}
+        aria-label="car"
+      >
+        <Car size={18} />
+      </button>
+      <button
+        onClick={() => setVehicle("pickup")}
+        className={`p-2 rounded ${vehicle === "pickup" ? "bg-white dark:bg-gray-600 shadow" : ""}`}
+        aria-label="pickup"
+      >
+        <Truck size={18} />
+      </button>
+    </div>
+  );
+}
+
+function Metric({ label, value, tone }: { label: string; value: string; tone: string }) {
+  const tones: Record<string, string> = {
+    blue: "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300",
+    green: "bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300",
+    amber: "bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300",
+  };
+  return (
+    <div className={`p-3 rounded-xl ${tones[tone] ?? tones["blue"]}`}>
+      <p className="text-[11px] opacity-80">{label}</p>
+      <p className="text-lg font-bold leading-tight">{value}</p>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/* DASHBOARD / REPORT                                                 */
+/* ================================================================== */
+
 function DashboardView({
   trips,
   employeeName,
@@ -1057,12 +1299,19 @@ function DashboardView({
 }) {
   const sendLine = useServerFn(sendLineMessage);
   const [sending, setSending] = useState(false);
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = utcDateString();
   const todayTrips = trips.filter((t) => t.date === todayStr);
-  const todayDist = todayTrips.reduce((s, t) => s + parseFloat((t.dist as any) || 0), 0).toFixed(1);
-  const todayCost = todayTrips.reduce((s, t) => s + parseFloat((t.cost as any) || 0), 0).toLocaleString();
-  const totalDist = trips.reduce((s, t) => s + parseFloat((t.dist as any) || 0), 0).toFixed(1);
-  const totalCost = trips.reduce((s, t) => s + parseFloat((t.cost as any) || 0), 0).toLocaleString();
+
+  const sum = (list: Trip[], key: "dist" | "cost") =>
+    list.reduce((s, t) => s + (parseFloat(String(t[key])) || 0), 0);
+
+  const todayDist = sum(todayTrips, "dist");
+  const todayCost = sum(todayTrips, "cost");
+  const todayMinutes = todayTrips.reduce((s, t) => s + (t.durationMin || 0), 0);
+  const totalDist = sum(trips, "dist");
+  const totalCost = sum(trips, "cost");
+  const litresToday =
+    settings.fuelEfficiency > 0 ? todayDist / settings.fuelEfficiency : 0;
 
   const buildMessage = () => {
     const todayTh = new Date().toLocaleDateString("th-TH", {
@@ -1072,26 +1321,24 @@ function DashboardView({
     });
     let text = `📋 สรุปงานประจำวัน: ${todayTh}\n`;
     text += `👤 พนักงาน: ${employeeName || "ไม่ระบุชื่อ"}\n`;
-    text += `🚗 ระยะทางรวมวันนี้: ${todayDist} km\n`;
-    text += `💰 ค่าเดินทางรวมวันนี้: ฿${todayCost}\n\n`;
-    text += `📍 สถานที่เข้าพบ (${todayTrips.length} แห่ง):\n`;
+    text += `🏪 เช็คอินทั้งหมด: ${todayTrips.length} ร้าน\n`;
+    text += `🚗 ระยะทางรวม: ${todayDist.toFixed(1)} กม.\n`;
+    text += `⛽ น้ำมันโดยประมาณ: ${litresToday.toFixed(2)} ลิตร (฿${settings.fuelPrice}/ลิตร)\n`;
+    text += `💰 ค่าเดินทางรวม: ฿${todayCost.toFixed(2)}\n`;
+    text += `⏱ เวลาปฏิบัติงานรวม: ${formatMinutes(todayMinutes)}\n\n`;
+    text += `📍 รายละเอียดงาน:\n`;
     [...todayTrips].reverse().forEach((t, i) => {
-      const tIn = t.timeIn || "-";
-      const tOut = t.timeOut || "-";
-      text += `${i + 1}. ${t.place} (${tIn} ถึง ${tOut})\n`;
+      text += `${i + 1}. ${t.place} (${t.timeIn || "-"} - ${t.timeOut || "-"})`;
+      if (t.jobType) text += ` [${t.jobType}]`;
+      text += ` ${Number(t.dist).toFixed(1)}กม./฿${Number(t.cost).toFixed(0)}\n`;
+      if (t.job) text += `   ↳ ${t.job}\n`;
     });
     return text;
   };
 
   const handleSendLineNotify = async () => {
-    if (todayTrips.length === 0) {
-      showToast("วันนี้ยังไม่ได้ลงงานเลยเพื่อน", "error");
-      return;
-    }
-    if (!settings.lineToken) {
-      showToast("ยังไม่ได้ตั้งค่า LINE Access Token (ไปแท็บตั้งค่า)", "error");
-      return;
-    }
+    if (todayTrips.length === 0) return showToast("วันนี้ยังไม่ได้ลงงานเลย", "error");
+    if (!settings.lineToken) return showToast("ยังไม่ได้ตั้งค่า LINE Access Token", "error");
     setSending(true);
     try {
       await sendLine({
@@ -1110,28 +1357,33 @@ function DashboardView({
   };
 
   const handleShareLine = () => {
-    if (todayTrips.length === 0) {
-      showToast("วันนี้ยังไม่ได้ลงงานเลย", "error");
-      return;
-    }
-    const lineUrl = `https://line.me/R/msg/text/?${encodeURIComponent(buildMessage())}`;
-    window.open(lineUrl, "_blank");
+    if (todayTrips.length === 0) return showToast("วันนี้ยังไม่ได้ลงงานเลย", "error");
+    window.open(`https://line.me/R/msg/text/?${encodeURIComponent(buildMessage())}`, "_blank");
   };
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold">ภาพรวมการทำงาน</h2>
+      <h2 className="text-xl font-bold">รายงานสรุปการทำงาน</h2>
 
       <div className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-2xl p-4 shadow-lg space-y-3">
-        <h3 className="font-bold">🗓 สรุปงานวันนี้ ({todayTrips.length} ทริป)</h3>
+        <h3 className="font-bold">🗓 สรุปวันนี้ ({todayStr})</h3>
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-white/15 backdrop-blur rounded-xl p-3">
-            <p className="text-xs opacity-80">ระยะทางวันนี้</p>
-            <p className="text-2xl font-bold">{todayDist} km</p>
+            <p className="text-xs opacity-80">เช็คอิน</p>
+            <p className="text-2xl font-bold">{todayTrips.length} ร้าน</p>
           </div>
           <div className="bg-white/15 backdrop-blur rounded-xl p-3">
-            <p className="text-xs opacity-80">ค่าใช้จ่ายวันนี้</p>
-            <p className="text-2xl font-bold">฿{todayCost}</p>
+            <p className="text-xs opacity-80">ระยะทางรวม</p>
+            <p className="text-2xl font-bold">{todayDist.toFixed(1)} กม.</p>
+          </div>
+          <div className="bg-white/15 backdrop-blur rounded-xl p-3">
+            <p className="text-xs opacity-80">ค่าน้ำมัน/ค่าเดินทาง</p>
+            <p className="text-2xl font-bold">฿{todayCost.toFixed(0)}</p>
+            <p className="text-[10px] opacity-80">≈ {litresToday.toFixed(2)} ลิตร</p>
+          </div>
+          <div className="bg-white/15 backdrop-blur rounded-xl p-3">
+            <p className="text-xs opacity-80">เวลาปฏิบัติงาน</p>
+            <p className="text-2xl font-bold">{formatMinutes(todayMinutes)}</p>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -1144,49 +1396,49 @@ function DashboardView({
           </button>
           <button
             onClick={handleShareLine}
-            className="bg-white/15 hover:bg-white/25 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition active:scale-[0.98] border border-white/20"
+            className="bg-white/15 hover:bg-white/25 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition border border-white/20"
           >
-            <ExternalLink size={16} /> แชร์มือ
+            <ExternalLink size={16} /> แชร์เอง
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow">
-          <p className="text-xs text-gray-500">รวมระยะทางสะสม</p>
-          <p className="text-xl font-bold text-blue-600">{totalDist} km</p>
+          <p className="text-xs text-gray-500">ระยะทางสะสม</p>
+          <p className="text-xl font-bold text-blue-600">{totalDist.toFixed(1)} กม.</p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow">
-          <p className="text-xs text-gray-500">รวมยอดเบิกสะสม</p>
-          <p className="text-xl font-bold text-green-600">฿{totalCost}</p>
+          <p className="text-xs text-gray-500">ยอดเบิกสะสม</p>
+          <p className="text-xl font-bold text-green-600">฿{totalCost.toLocaleString()}</p>
         </div>
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-lg">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-bold">ประวัติทริปล่าสุด</h3>
-        </div>
+        <h3 className="font-bold mb-3">รายละเอียดงานล่าสุด</h3>
         <div className="space-y-2">
           {trips.length === 0 ? (
             <p className="text-center text-gray-500 py-6 text-sm">ยังไม่มีประวัติการเดินทาง</p>
           ) : (
-            trips.map((trip) => (
-              <div
-                key={trip.id}
-                className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium truncate">{trip.place}</p>
-                  <p className="text-xs text-gray-500">
-                    {trip.date} ·{" "}
-                    {trip.timeIn ? `${trip.timeIn} - ${trip.timeOut || "?"}` : "ไม่ได้ลงเวลา"}
-                  </p>
-                </div>
-                <div className="text-right ml-2">
-                  <p className="font-bold text-sm">{trip.dist} km · ฿{trip.cost}</p>
-                  <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">
-                    {trip.status}
-                  </span>
+            trips.slice(0, 50).map((trip) => (
+              <div key={trip.id} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate text-sm">{trip.place}</p>
+                    <p className="text-[11px] text-gray-500">
+                      {trip.date} · {trip.timeIn || "--:--"} - {trip.timeOut || "--:--"} ·{" "}
+                      {formatMinutes(trip.durationMin ?? null)}
+                    </p>
+                    {trip.job && <p className="text-[11px] text-gray-500 mt-0.5">{trip.job}</p>}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="font-bold text-sm">
+                      {Number(trip.dist).toFixed(1)} กม. · ฿{Number(trip.cost).toFixed(0)}
+                    </p>
+                    <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">
+                      {trip.status}
+                    </span>
+                  </div>
                 </div>
               </div>
             ))
@@ -1197,28 +1449,42 @@ function DashboardView({
   );
 }
 
+/* ================================================================== */
+/* SETTINGS                                                           */
+/* ================================================================== */
+
 function SettingsView({
   settings,
   onSave,
   showToast,
+  isAdmin,
 }: {
   settings: AppSettings;
   onSave: (s: AppSettings) => void;
   showToast: (m: string, t?: string) => void;
+  isAdmin: boolean;
 }) {
   const [form, setForm] = useState<AppSettings>(settings);
   const [testing, setTesting] = useState(false);
   const sendLine = useServerFn(sendLineMessage);
 
-  useEffect(() => {
-    setForm(settings);
-  }, [settings]);
+  useEffect(() => setForm(settings), [settings]);
+
+  const preview = (() => {
+    try {
+      return calculateFuelCost({
+        distanceKm: 10,
+        fuelEfficiency: form.fuelEfficiency,
+        fuelPrice: form.fuelPrice,
+        ratePerKm: form.ratePerKm,
+      });
+    } catch {
+      return null;
+    }
+  })();
 
   const handleTest = async () => {
-    if (!form.lineToken) {
-      showToast("กรอก Channel Access Token ก่อน", "error");
-      return;
-    }
+    if (!form.lineToken) return showToast("กรอก Channel Access Token ก่อน", "error");
     setTesting(true);
     try {
       await sendLine({
@@ -1236,6 +1502,8 @@ function SettingsView({
     }
   };
 
+  const disabled = !isAdmin;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -1243,7 +1511,12 @@ function SettingsView({
         <h2 className="text-xl font-bold">ตั้งค่าระบบ</h2>
       </div>
 
-      {/* LINE Settings */}
+      {!isAdmin && (
+        <p className="text-xs bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 rounded-xl p-3">
+          การตั้งค่าเหล่านี้กำหนดโดยผู้ดูแลระบบ (ดูได้อย่างเดียว)
+        </p>
+      )}
+
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-5 space-y-4 border border-slate-200/60 dark:border-slate-700">
         <div className="flex items-center gap-2">
           <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 grid place-items-center">
@@ -1263,10 +1536,11 @@ function SettingsView({
           </label>
           <textarea
             value={form.lineToken}
+            disabled={disabled}
             onChange={(e) => setForm({ ...form, lineToken: e.target.value })}
             rows={3}
-            placeholder="วาง Channel Access Token (long-lived) จาก LINE Developers Console"
-            className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
+            placeholder="วาง Channel Access Token (long-lived)"
+            className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs disabled:opacity-70"
           />
         </div>
 
@@ -1275,13 +1549,11 @@ function SettingsView({
           <input
             type="text"
             value={form.lineSecret}
+            disabled={disabled}
             onChange={(e) => setForm({ ...form, lineSecret: e.target.value })}
-            placeholder="วาง Channel Secret จาก LINE Developers Console"
-            className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
+            placeholder="วาง Channel Secret"
+            className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs disabled:opacity-70"
           />
-          <p className="text-[11px] text-slate-500 mt-1">
-            ใช้ในการตรวจสอบ webhook signature (เก็บไว้ใน localStorage)
-          </p>
         </div>
 
         <button
@@ -1291,87 +1563,97 @@ function SettingsView({
         >
           <Send size={16} /> {testing ? "กำลังส่ง..." : "ทดสอบส่งแจ้งเตือน LINE"}
         </button>
-
-        <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-xl p-3 text-xs space-y-1">
-          <p className="font-bold text-blue-700 dark:text-blue-300">📘 วิธีรับ Token & Secret</p>
-          <ol className="list-decimal list-inside space-y-0.5 text-slate-700 dark:text-slate-300">
-            <li>
-              เข้า{" "}
-              <a
-                href="https://developers.line.biz/console/"
-                target="_blank"
-                rel="noreferrer"
-                className="underline text-blue-600"
-              >
-                LINE Developers Console
-              </a>
-            </li>
-            <li>สร้าง Provider → Channel แบบ Messaging API</li>
-            <li>แท็บ "Basic settings" คัดลอก Channel secret</li>
-            <li>แท็บ "Messaging API" คัดลอก Channel access token (long-lived)</li>
-            <li>เพิ่ม Bot เป็นเพื่อน เพื่อรับ broadcast แจ้งเตือน</li>
-          </ol>
-        </div>
       </div>
 
-      {/* Cost Settings */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-5 space-y-4 border border-slate-200/60 dark:border-slate-700">
         <div className="flex items-center gap-2">
           <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/40 grid place-items-center">
             <Fuel className="text-orange-600" size={20} />
           </div>
           <div>
-            <h3 className="font-bold">ตั้งค่าค่าน้ำมัน / ค่าเดินทาง</h3>
+            <h3 className="font-bold">ค่าน้ำมัน / การคำนวณ</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              ใช้คำนวณค่าใช้จ่ายในการเดินทาง
+              สูตรสากล: (ระยะทาง ÷ อัตราสิ้นเปลือง) × ราคาน้ำมัน
             </p>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-sm font-medium block mb-1">ราคาน้ำมัน (฿/ลิตร)</label>
-            <input
-              type="number"
-              step="0.01"
-              value={form.fuelPrice}
-              onChange={(e) => setForm({ ...form, fuelPrice: parseFloat(e.target.value) || 0 })}
-              className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-orange-500 text-lg font-bold"
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium block mb-1">
-              ราคาต่อกิโลเมตร (฿/km)
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              value={form.ratePerKm}
-              onChange={(e) => setForm({ ...form, ratePerKm: parseFloat(e.target.value) || 0 })}
-              placeholder="0 = ใช้ตามชนิดรถ"
-              className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-orange-500 text-lg font-bold"
-            />
-          </div>
+          <NumberField
+            label="ราคาน้ำมัน (฿/ลิตร)"
+            value={form.fuelPrice}
+            disabled={disabled}
+            onChange={(v) => setForm({ ...form, fuelPrice: v })}
+          />
+          <NumberField
+            label="อัตราสิ้นเปลือง (กม./ลิตร)"
+            value={form.fuelEfficiency}
+            disabled={disabled}
+            onChange={(v) => setForm({ ...form, fuelEfficiency: v })}
+          />
+          <NumberField
+            label="เรทเหมาต่อกิโลเมตร (0 = ปิด)"
+            value={form.ratePerKm}
+            disabled={disabled}
+            onChange={(v) => setForm({ ...form, ratePerKm: v })}
+          />
+          <NumberField
+            label="รัศมีเช็คอิน (กม.)"
+            value={form.checkinRadiusKm}
+            disabled={disabled}
+            onChange={(v) => setForm({ ...form, checkinRadiusKm: v })}
+          />
         </div>
 
-        <div className="bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-900 rounded-xl p-3 text-xs space-y-1">
-          <p className="font-semibold text-orange-700 dark:text-orange-300">
-            🚗 อัตราเริ่มต้นต่อกิโลเมตร (ถ้าตั้ง 0 ในช่องบน)
-          </p>
-          <ul className="text-slate-700 dark:text-slate-300 space-y-0.5">
-            <li>• มอเตอร์ไซค์: ฿{vehicleRates.motorcycle.rate}/km</li>
-            <li>• รถยนต์: ฿{vehicleRates.car.rate}/km</li>
-            <li>• รถกระบะ: ฿{vehicleRates.pickup.rate}/km</li>
-          </ul>
-        </div>
+        {preview && (
+          <div className="bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-900 rounded-xl p-3 text-xs space-y-1">
+            <p className="font-semibold text-orange-700 dark:text-orange-300">
+              ตัวอย่าง: เดินทาง 10 กม.
+            </p>
+            <p className="text-slate-700 dark:text-slate-300">
+              ใช้น้ำมัน {preview.litresUsed} ลิตร · ค่าใช้จ่าย ฿{preview.fuelCost} (
+              {preview.method === "rate" ? "เรทเหมา" : "สูตรน้ำมัน"} ≈ ฿
+              {preview.effectiveCostPerKm}/กม.)
+            </p>
+          </div>
+        )}
       </div>
 
-      <button
-        onClick={() => onSave(form)}
-        className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition active:scale-[0.98]"
-      >
-        <Save size={18} /> บันทึกการตั้งค่าทั้งหมด
-      </button>
+      {isAdmin && (
+        <button
+          onClick={() => onSave(form)}
+          className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition active:scale-[0.98]"
+        >
+          <Save size={18} /> บันทึกการตั้งค่าทั้งหมด
+        </button>
+      )}
+    </div>
+  );
+}
+
+function NumberField({
+  label,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div>
+      <label className="text-sm font-medium block mb-1">{label}</label>
+      <input
+        type="number"
+        step="0.01"
+        inputMode="decimal"
+        disabled={disabled}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+        className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-orange-500 text-lg font-bold disabled:opacity-70"
+      />
     </div>
   );
 }
