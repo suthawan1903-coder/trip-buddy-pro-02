@@ -121,7 +121,9 @@ export const createEmployee = createServerFn({ method: "POST" })
       employee_code: code,
       full_name: data.fullName,
       phone: data.phone || null,
+      position: data.position || null,
     });
+
     if (pErr) {
       await supabaseAdmin.auth.admin.deleteUser(uid);
       throw new Error(pErr.message.includes("duplicate") ? "รหัสพนักงานนี้ถูกใช้แล้ว" : pErr.message);
