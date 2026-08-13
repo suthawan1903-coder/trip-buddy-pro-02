@@ -40,6 +40,8 @@ import { supabase } from "@/integrations/supabase/client";
 import logoUrl from "@/assets/engcorp-logo.png";
 import InstallPrompt from "@/components/InstallPrompt";
 import { calculateFuelCost, tryCalculateFuelCost } from "@/lib/fuel-cost";
+import { compressImageFiles } from "@/lib/image-capture";
+import { fetchPttFuelPrices, type FuelPrice } from "@/lib/fuel-price-client";
 import {
   fetchRoute,
   geocodeDistrict,
@@ -393,6 +395,7 @@ function FormView({
   const [saving, setSaving] = useState(false);
   const [nearby, setNearby] = useState<{ c: Customer; km: number }[]>([]);
   const [scanningNearby, setScanningNearby] = useState(false);
+  const [processingPhoto, setProcessingPhoto] = useState(false);
   const routeLayerRef = useRef<any>(null);
   const startMarkerRef = useRef<any>(null);
   const destMarkerRef = useRef<any>(null);
@@ -405,7 +408,7 @@ function FormView({
     place: "",
     timeIn: "",
     timeOut: "",
-    jobType: "",
+    jobTypes: [] as string[],
     job: "",
     images: [] as string[],
   });
@@ -730,18 +733,41 @@ function FormView({
     saveDraftToLocal(newData);
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    files.forEach((file) => {
-      const reader = new FileReader();
-      reader.onloadend = () =>
-        setFormData((prev) => ({ ...prev, images: [...prev.images, reader.result as string] }));
-      reader.readAsDataURL(file);
-    });
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target;
+    const files = input.files;
+    if (!files || files.length === 0) return;
+    setProcessingPhoto(true);
+    try {
+      const captured = await compressImageFiles(files);
+      if (captured.length === 0) showToast("ไม่พบไฟล์รูปที่ใช้ได้", "error");
+      else
+        setFormData((prev) => ({
+          ...prev,
+          images: [...prev.images, ...captured.map((c) => c.dataUrl)],
+        }));
+    } catch {
+      showToast("เพิ่มรูปไม่สำเร็จ", "error");
+    } finally {
+      setProcessingPhoto(false);
+      // reset so selecting the same photo again still fires onChange (old iOS)
+      input.value = "";
+    }
   };
 
   const handleRemoveImage = (idx: number) =>
     setFormData((prev) => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }));
+
+  const toggleJobType = (job: string) => {
+    const next = {
+      ...formData,
+      jobTypes: formData.jobTypes.includes(job)
+        ? formData.jobTypes.filter((j) => j !== job)
+        : [...formData.jobTypes, job],
+    };
+    setFormData(next);
+    saveDraftToLocal(next);
+  };
 
   const handleTimeStamp = (field: "timeIn" | "timeOut") => {
     const timeString = new Date().toLocaleTimeString("th-TH", {
@@ -778,7 +804,7 @@ function FormView({
           vehicle,
           mode: trackingMode,
           job: formData.job || null,
-          job_type: formData.jobType || null,
+          job_type: formData.jobTypes.join(", ") || null,
           images: formData.images,
           status: "รออนุมัติ",
           lat: destPoint?.[0] ?? startPoint?.[0] ?? null,
@@ -817,7 +843,7 @@ function FormView({
         prov: "",
         dist: "",
         job: "",
-        jobType: "",
+        jobTypes: [],
         timeIn: "",
         timeOut: "",
         images: [],
@@ -1157,28 +1183,59 @@ function FormView({
           )}
 
           <div>
-            <label className="text-sm font-medium block mb-1">ประเภทงาน (เลือกด่วน)</label>
-            <div className="flex flex-wrap gap-2">
-              {JOB_PRESETS.map((j) => (
-                <button
-                  key={j}
-                  type="button"
-                  onClick={() => {
-                    const next = { ...formData, jobType: formData.jobType === j ? "" : j };
-                    setFormData(next);
-                    saveDraftToLocal(next);
-                  }}
-                  className={`h-9 px-3 rounded-xl text-xs font-bold transition ${
-                    formData.jobType === j
-                      ? "bg-blue-600 text-white shadow"
-                      : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-                  }`}
-                >
-                  {j}
-                </button>
-              ))}
+            <label className="text-sm font-medium block mb-1">
+              ประเภทงาน (เลือกได้หลายอย่าง)
+            </label>
+            {formData.jobTypes.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {formData.jobTypes.map((j) => (
+                  <span
+                    key={j}
+                    className="inline-flex items-center gap-1 h-7 pl-2.5 pr-1.5 rounded-full bg-blue-600 text-white text-[11px] font-bold"
+                  >
+                    {j}
+                    <button
+                      type="button"
+                      onClick={() => toggleJobType(j)}
+                      aria-label={`ลบ ${j}`}
+                      className="rounded-full bg-white/20 p-0.5"
+                    >
+                      <X size={10} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-2">
+              {JOB_PRESETS.map((j) => {
+                const active = formData.jobTypes.includes(j);
+                return (
+                  <button
+                    key={j}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={active}
+                    onClick={() => toggleJobType(j)}
+                    className={`min-h-11 px-3 py-2 rounded-xl text-xs font-bold text-left flex items-center gap-2 border transition ${
+                      active
+                        ? "bg-blue-50 dark:bg-blue-950/40 border-blue-500 text-blue-700 dark:text-blue-300"
+                        : "bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300"
+                    }`}
+                  >
+                    <span
+                      className={`w-4 h-4 rounded grid place-items-center border shrink-0 ${
+                        active ? "bg-blue-600 border-blue-600 text-white" : "border-slate-400"
+                      }`}
+                    >
+                      {active && <CheckCircle size={12} />}
+                    </span>
+                    {j}
+                  </button>
+                );
+              })}
             </div>
           </div>
+
 
           <div>
             <label className="text-sm font-medium block mb-1">รายละเอียดงานเพิ่มเติม</label>
@@ -1196,12 +1253,35 @@ function FormView({
             <label className="text-sm font-medium block mb-1">
               หลักฐาน / บิลน้ำมัน / รูปถ่ายหน้างาน
             </label>
-            <label className="block border-2 border-dashed dark:border-gray-600 rounded-xl p-6 text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
-              <input type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />
-              <Camera className="mx-auto text-gray-400" size={32} />
-              <p className="text-sm mt-2 font-medium">แตะเพื่อถ่ายรูป หรือเลือกไฟล์</p>
-              <p className="text-xs text-gray-500">อัปโหลดได้หลายรูป (JPG, PNG)</p>
-            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="border-2 border-dashed dark:border-gray-600 rounded-xl p-4 text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition active:scale-[0.98]">
+                {/* Native camera — works on legacy iOS/Android, no WebRTC */}
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+                <Camera className="mx-auto text-blue-500" size={28} />
+                <p className="text-xs mt-2 font-bold">ถ่ายรูปด้วยกล้อง</p>
+              </label>
+              <label className="border-2 border-dashed dark:border-gray-600 rounded-xl p-4 text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition active:scale-[0.98]">
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+                <FileText className="mx-auto text-slate-400" size={28} />
+                <p className="text-xs mt-2 font-bold">เลือกจากคลังภาพ</p>
+              </label>
+            </div>
+            <p className="text-[11px] text-gray-500 mt-1 text-center">
+              {processingPhoto ? "กำลังย่อขนาดรูป..." : "รูปจะถูกย่อขนาดอัตโนมัติเพื่อประหยัดเน็ต"}
+            </p>
+
             {formData.images.length > 0 && (
               <div className="grid grid-cols-3 gap-2 mt-3">
                 {formData.images.map((imgSrc, index) => (
@@ -1466,7 +1546,22 @@ function SettingsView({
 }) {
   const [form, setForm] = useState<AppSettings>(settings);
   const [testing, setTesting] = useState(false);
+  const [pttLoading, setPttLoading] = useState(false);
+  const [ptt, setPtt] = useState<{ date: string; prices: FuelPrice[] } | null>(null);
   const sendLine = useServerFn(sendLineMessage);
+
+  const loadPttPrices = async () => {
+    setPttLoading(true);
+    try {
+      const data = await fetchPttFuelPrices();
+      setPtt({ date: data.date, prices: data.prices });
+      showToast(`ราคาน้ำมัน ปตท. วันที่ ${data.date} ✅`);
+    } catch (e: any) {
+      showToast(e?.message || "ดึงราคาน้ำมันไม่สำเร็จ", "error");
+    } finally {
+      setPttLoading(false);
+    }
+  };
 
   useEffect(() => setForm(settings), [settings]);
 
@@ -1603,6 +1698,50 @@ function SettingsView({
             disabled={disabled}
             onChange={(v) => setForm({ ...form, checkinRadiusKm: v })}
           />
+        </div>
+
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-bold">ราคาน้ำมันวันนี้ (ปตท.)</p>
+            <button
+              type="button"
+              onClick={loadPttPrices}
+              disabled={pttLoading}
+              className="h-9 px-3 rounded-xl bg-orange-500 disabled:opacity-60 text-white text-xs font-bold flex items-center gap-1"
+            >
+              {pttLoading ? <Loader2 size={14} className="animate-spin" /> : <Fuel size={14} />}
+              ดึงราคาอัตโนมัติ
+            </button>
+          </div>
+          {ptt ? (
+            <>
+              <p className="text-[11px] text-slate-500">
+                ประกาศวันที่ {ptt.date} · แตะเพื่อใช้ราคานี้
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {ptt.prices.map((p) => (
+                  <button
+                    key={p.key}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => setForm({ ...form, fuelPrice: p.price })}
+                    className={`min-h-11 px-3 py-2 rounded-xl text-left text-xs font-bold border transition disabled:opacity-60 ${
+                      form.fuelPrice === p.price
+                        ? "border-orange-500 bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300"
+                        : "border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900"
+                    }`}
+                  >
+                    <span className="block truncate">{p.name}</span>
+                    <span className="text-sm">฿{p.price.toFixed(2)}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="text-[11px] text-slate-500">
+              ระบบดึงข้อมูลผ่านเซิร์ฟเวอร์ของเรา (มีแคช 30 นาที) จึงไม่ติดปัญหา CORS
+            </p>
+          )}
         </div>
 
         {preview && (
