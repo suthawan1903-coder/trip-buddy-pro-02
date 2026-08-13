@@ -37,24 +37,29 @@ const THAI_LABELS: Record<string, string> = {
 const label = (key: string, fallback?: string) =>
   THAI_LABELS[key] ?? fallback ?? key.replace(/_/g, " ");
 
+type OilEntry = { name?: string; price?: string | number };
+
 function normalizeThaiOilApi(json: unknown): FuelPricePayload | null {
   const root = json as {
     response?: {
       date?: string;
-      stations?: Record<string, { oil?: Record<string, { name?: string; price?: string }> }>;
+      stations?: Record<string, Record<string, OilEntry> & { oil?: Record<string, OilEntry> }>;
     };
   };
   const station = root.response?.stations?.["ptt"];
-  const oil = station?.oil;
+  // Upstream has shipped both `stations.ptt.<fuel>` and `stations.ptt.oil.<fuel>`.
+  const oil = (station?.oil ?? station) as Record<string, OilEntry> | undefined;
   if (!oil) return null;
 
   const prices: FuelPrice[] = [];
   for (const [key, value] of Object.entries(oil)) {
-    const price = Number.parseFloat(String(value?.price ?? ""));
+    if (!value || typeof value !== "object") continue;
+    const price = Number.parseFloat(String(value.price ?? ""));
     if (!Number.isFinite(price) || price <= 0) continue;
-    prices.push({ key, name: label(key, value?.name), price: Math.round(price * 100) / 100 });
+    prices.push({ key, name: label(key, value.name), price: Math.round(price * 100) / 100 });
   }
   if (prices.length === 0) return null;
+
 
   return {
     source: "PTT (ptt.com)",
