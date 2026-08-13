@@ -1157,28 +1157,59 @@ function FormView({
           )}
 
           <div>
-            <label className="text-sm font-medium block mb-1">ประเภทงาน (เลือกด่วน)</label>
-            <div className="flex flex-wrap gap-2">
-              {JOB_PRESETS.map((j) => (
-                <button
-                  key={j}
-                  type="button"
-                  onClick={() => {
-                    const next = { ...formData, jobType: formData.jobType === j ? "" : j };
-                    setFormData(next);
-                    saveDraftToLocal(next);
-                  }}
-                  className={`h-9 px-3 rounded-xl text-xs font-bold transition ${
-                    formData.jobType === j
-                      ? "bg-blue-600 text-white shadow"
-                      : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-                  }`}
-                >
-                  {j}
-                </button>
-              ))}
+            <label className="text-sm font-medium block mb-1">
+              ประเภทงาน (เลือกได้หลายอย่าง)
+            </label>
+            {formData.jobTypes.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {formData.jobTypes.map((j) => (
+                  <span
+                    key={j}
+                    className="inline-flex items-center gap-1 h-7 pl-2.5 pr-1.5 rounded-full bg-blue-600 text-white text-[11px] font-bold"
+                  >
+                    {j}
+                    <button
+                      type="button"
+                      onClick={() => toggleJobType(j)}
+                      aria-label={`ลบ ${j}`}
+                      className="rounded-full bg-white/20 p-0.5"
+                    >
+                      <X size={10} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-2">
+              {JOB_PRESETS.map((j) => {
+                const active = formData.jobTypes.includes(j);
+                return (
+                  <button
+                    key={j}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={active}
+                    onClick={() => toggleJobType(j)}
+                    className={`min-h-11 px-3 py-2 rounded-xl text-xs font-bold text-left flex items-center gap-2 border transition ${
+                      active
+                        ? "bg-blue-50 dark:bg-blue-950/40 border-blue-500 text-blue-700 dark:text-blue-300"
+                        : "bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300"
+                    }`}
+                  >
+                    <span
+                      className={`w-4 h-4 rounded grid place-items-center border shrink-0 ${
+                        active ? "bg-blue-600 border-blue-600 text-white" : "border-slate-400"
+                      }`}
+                    >
+                      {active && <CheckCircle size={12} />}
+                    </span>
+                    {j}
+                  </button>
+                );
+              })}
             </div>
           </div>
+
 
           <div>
             <label className="text-sm font-medium block mb-1">รายละเอียดงานเพิ่มเติม</label>
