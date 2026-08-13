@@ -1253,12 +1253,35 @@ function FormView({
             <label className="text-sm font-medium block mb-1">
               หลักฐาน / บิลน้ำมัน / รูปถ่ายหน้างาน
             </label>
-            <label className="block border-2 border-dashed dark:border-gray-600 rounded-xl p-6 text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
-              <input type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />
-              <Camera className="mx-auto text-gray-400" size={32} />
-              <p className="text-sm mt-2 font-medium">แตะเพื่อถ่ายรูป หรือเลือกไฟล์</p>
-              <p className="text-xs text-gray-500">อัปโหลดได้หลายรูป (JPG, PNG)</p>
-            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="border-2 border-dashed dark:border-gray-600 rounded-xl p-4 text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition active:scale-[0.98]">
+                {/* Native camera — works on legacy iOS/Android, no WebRTC */}
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+                <Camera className="mx-auto text-blue-500" size={28} />
+                <p className="text-xs mt-2 font-bold">ถ่ายรูปด้วยกล้อง</p>
+              </label>
+              <label className="border-2 border-dashed dark:border-gray-600 rounded-xl p-4 text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition active:scale-[0.98]">
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+                <FileText className="mx-auto text-slate-400" size={28} />
+                <p className="text-xs mt-2 font-bold">เลือกจากคลังภาพ</p>
+              </label>
+            </div>
+            <p className="text-[11px] text-gray-500 mt-1 text-center">
+              {processingPhoto ? "กำลังย่อขนาดรูป..." : "รูปจะถูกย่อขนาดอัตโนมัติเพื่อประหยัดเน็ต"}
+            </p>
+
             {formData.images.length > 0 && (
               <div className="grid grid-cols-3 gap-2 mt-3">
                 {formData.images.map((imgSrc, index) => (
