@@ -1546,7 +1546,22 @@ function SettingsView({
 }) {
   const [form, setForm] = useState<AppSettings>(settings);
   const [testing, setTesting] = useState(false);
+  const [pttLoading, setPttLoading] = useState(false);
+  const [ptt, setPtt] = useState<{ date: string; prices: FuelPrice[] } | null>(null);
   const sendLine = useServerFn(sendLineMessage);
+
+  const loadPttPrices = async () => {
+    setPttLoading(true);
+    try {
+      const data = await fetchPttFuelPrices();
+      setPtt({ date: data.date, prices: data.prices });
+      showToast(`ราคาน้ำมัน ปตท. วันที่ ${data.date} ✅`);
+    } catch (e: any) {
+      showToast(e?.message || "ดึงราคาน้ำมันไม่สำเร็จ", "error");
+    } finally {
+      setPttLoading(false);
+    }
+  };
 
   useEffect(() => setForm(settings), [settings]);
 
@@ -1683,6 +1698,50 @@ function SettingsView({
             disabled={disabled}
             onChange={(v) => setForm({ ...form, checkinRadiusKm: v })}
           />
+        </div>
+
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-bold">ราคาน้ำมันวันนี้ (ปตท.)</p>
+            <button
+              type="button"
+              onClick={loadPttPrices}
+              disabled={pttLoading}
+              className="h-9 px-3 rounded-xl bg-orange-500 disabled:opacity-60 text-white text-xs font-bold flex items-center gap-1"
+            >
+              {pttLoading ? <Loader2 size={14} className="animate-spin" /> : <Fuel size={14} />}
+              ดึงราคาอัตโนมัติ
+            </button>
+          </div>
+          {ptt ? (
+            <>
+              <p className="text-[11px] text-slate-500">
+                ประกาศวันที่ {ptt.date} · แตะเพื่อใช้ราคานี้
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {ptt.prices.map((p) => (
+                  <button
+                    key={p.key}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => setForm({ ...form, fuelPrice: p.price })}
+                    className={`min-h-11 px-3 py-2 rounded-xl text-left text-xs font-bold border transition disabled:opacity-60 ${
+                      form.fuelPrice === p.price
+                        ? "border-orange-500 bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300"
+                        : "border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900"
+                    }`}
+                  >
+                    <span className="block truncate">{p.name}</span>
+                    <span className="text-sm">฿{p.price.toFixed(2)}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="text-[11px] text-slate-500">
+              ระบบดึงข้อมูลผ่านเซิร์ฟเวอร์ของเรา (มีแคช 30 นาที) จึงไม่ติดปัญหา CORS
+            </p>
+          )}
         </div>
 
         {preview && (
