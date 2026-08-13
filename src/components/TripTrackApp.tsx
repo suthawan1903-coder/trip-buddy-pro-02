@@ -40,6 +40,8 @@ import { supabase } from "@/integrations/supabase/client";
 import logoUrl from "@/assets/engcorp-logo.png";
 import InstallPrompt from "@/components/InstallPrompt";
 import { calculateFuelCost, tryCalculateFuelCost } from "@/lib/fuel-cost";
+import { compressImageFiles } from "@/lib/image-capture";
+import { fetchPttFuelPrices, type FuelPrice } from "@/lib/fuel-price-client";
 import {
   fetchRoute,
   geocodeDistrict,
@@ -393,6 +395,7 @@ function FormView({
   const [saving, setSaving] = useState(false);
   const [nearby, setNearby] = useState<{ c: Customer; km: number }[]>([]);
   const [scanningNearby, setScanningNearby] = useState(false);
+  const [processingPhoto, setProcessingPhoto] = useState(false);
   const routeLayerRef = useRef<any>(null);
   const startMarkerRef = useRef<any>(null);
   const destMarkerRef = useRef<any>(null);
@@ -405,7 +408,7 @@ function FormView({
     place: "",
     timeIn: "",
     timeOut: "",
-    jobType: "",
+    jobTypes: [] as string[],
     job: "",
     images: [] as string[],
   });
@@ -730,18 +733,41 @@ function FormView({
     saveDraftToLocal(newData);
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    files.forEach((file) => {
-      const reader = new FileReader();
-      reader.onloadend = () =>
-        setFormData((prev) => ({ ...prev, images: [...prev.images, reader.result as string] }));
-      reader.readAsDataURL(file);
-    });
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target;
+    const files = input.files;
+    if (!files || files.length === 0) return;
+    setProcessingPhoto(true);
+    try {
+      const captured = await compressImageFiles(files);
+      if (captured.length === 0) showToast("ไม่พบไฟล์รูปที่ใช้ได้", "error");
+      else
+        setFormData((prev) => ({
+          ...prev,
+          images: [...prev.images, ...captured.map((c) => c.dataUrl)],
+        }));
+    } catch {
+      showToast("เพิ่มรูปไม่สำเร็จ", "error");
+    } finally {
+      setProcessingPhoto(false);
+      // reset so selecting the same photo again still fires onChange (old iOS)
+      input.value = "";
+    }
   };
 
   const handleRemoveImage = (idx: number) =>
     setFormData((prev) => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }));
+
+  const toggleJobType = (job: string) => {
+    const next = {
+      ...formData,
+      jobTypes: formData.jobTypes.includes(job)
+        ? formData.jobTypes.filter((j) => j !== job)
+        : [...formData.jobTypes, job],
+    };
+    setFormData(next);
+    saveDraftToLocal(next);
+  };
 
   const handleTimeStamp = (field: "timeIn" | "timeOut") => {
     const timeString = new Date().toLocaleTimeString("th-TH", {
@@ -778,7 +804,7 @@ function FormView({
           vehicle,
           mode: trackingMode,
           job: formData.job || null,
-          job_type: formData.jobType || null,
+          job_type: formData.jobTypes.join(", ") || null,
           images: formData.images,
           status: "รออนุมัติ",
           lat: destPoint?.[0] ?? startPoint?.[0] ?? null,
@@ -817,7 +843,7 @@ function FormView({
         prov: "",
         dist: "",
         job: "",
-        jobType: "",
+        jobTypes: [],
         timeIn: "",
         timeOut: "",
         images: [],
