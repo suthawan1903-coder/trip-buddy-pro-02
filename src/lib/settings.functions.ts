@@ -9,6 +9,7 @@ const settingsSchema = z.object({
   checkinRadiusKm: z.number().min(0.1).max(200),
   lineToken: z.string().max(4000).optional(),
   lineSecret: z.string().max(500).optional(),
+  lineNotifyToken: z.string().max(4000).optional(),
 });
 
 /** Global settings, readable by every signed-in employee. */
@@ -17,7 +18,9 @@ export const getAppSettings = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase
       .from("app_settings")
-      .select("fuel_price, fuel_efficiency, rate_per_km, checkin_radius_km, line_token, line_secret")
+      .select(
+        "fuel_price, fuel_efficiency, rate_per_km, checkin_radius_km, line_token, line_secret, line_notify_token",
+      )
       .maybeSingle();
     if (error) throw new Error(error.message);
     return {
@@ -27,8 +30,10 @@ export const getAppSettings = createServerFn({ method: "GET" })
       checkinRadiusKm: Number(data?.checkin_radius_km ?? 5),
       lineToken: data?.line_token ?? "",
       lineSecret: data?.line_secret ?? "",
+      lineNotifyToken: data?.line_notify_token ?? "",
     };
   });
+
 
 /** Admin-only write of the global settings. */
 export const updateAppSettings = createServerFn({ method: "POST" })
