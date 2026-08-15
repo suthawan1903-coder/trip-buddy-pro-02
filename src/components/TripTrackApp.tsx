@@ -124,8 +124,9 @@ export default function TripTrackApp() {
   const { profile, isAdmin, userId } = useSession();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<
-    "form" | "dashboard" | "settings" | "employees" | "admin"
+    "form" | "dashboard" | "settings" | "employees" | "admin" | "reports"
   >("form");
+
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
   const [trips, setTrips] = useState<Trip[]>([]);
