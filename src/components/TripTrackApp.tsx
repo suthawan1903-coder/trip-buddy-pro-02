@@ -825,6 +825,9 @@ function FormView({
           job: formData.job || null,
           job_type: formData.jobTypes.join(", ") || null,
           images: formData.images,
+          sales_items: cleanSalesItems(formData.salesItems),
+          sales_total: totalSales,
+
           status: "รออนุมัติ",
           lat: destPoint?.[0] ?? startPoint?.[0] ?? null,
           lng: destPoint?.[1] ?? startPoint?.[1] ?? null,
