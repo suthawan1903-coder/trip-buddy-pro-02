@@ -48,6 +48,15 @@ import logoUrl from "@/assets/engcorp-logo.png";
 import InstallPrompt from "@/components/InstallPrompt";
 import { calculateFuelCost, tryCalculateFuelCost } from "@/lib/fuel-cost";
 import { compressImageFiles } from "@/lib/image-capture";
+import {
+  cleanSalesItems,
+  lineTotal,
+  newSalesItem,
+  salesTotal,
+  thb,
+  type SalesItem,
+} from "@/lib/sales";
+
 import { fetchPttFuelPrices, type FuelPrice } from "@/lib/fuel-price-client";
 import {
   fetchRoute,
