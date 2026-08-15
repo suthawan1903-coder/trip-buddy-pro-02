@@ -338,7 +338,11 @@ export default function TripTrackApp() {
           <NavButton icon={<ShieldCheck />} label="จัดการงาน" isActive={activeTab === "admin"} onClick={() => setActiveTab("admin")} />
         )}
         {isAdmin && (
+          <NavButton icon={<CalendarRange />} label="ย้อนหลัง" isActive={activeTab === "reports"} onClick={() => setActiveTab("reports")} />
+        )}
+        {isAdmin && (
           <NavButton icon={<UsersIcon />} label="พนักงาน" isActive={activeTab === "employees"} onClick={() => setActiveTab("employees")} />
+
         )}
         <NavButton icon={<SettingsIcon />} label="ตั้งค่า" isActive={activeTab === "settings"} onClick={() => setActiveTab("settings")} />
       </nav>
