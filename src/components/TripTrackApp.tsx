@@ -863,8 +863,10 @@ function FormView({
         dist: "",
         job: "",
         jobTypes: [],
+        salesItems: [],
         timeIn: "",
         timeOut: "",
+
         images: [],
       }));
       setDistance(0);
