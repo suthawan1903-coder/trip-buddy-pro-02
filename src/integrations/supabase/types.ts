@@ -21,6 +21,7 @@ export type Database = {
           fuel_efficiency: number
           fuel_price: number
           id: boolean
+          line_notify_token: string | null
           line_secret: string | null
           line_token: string | null
           rate_per_km: number
@@ -32,6 +33,7 @@ export type Database = {
           fuel_efficiency?: number
           fuel_price?: number
           id?: boolean
+          line_notify_token?: string | null
           line_secret?: string | null
           line_token?: string | null
           rate_per_km?: number
@@ -43,6 +45,7 @@ export type Database = {
           fuel_efficiency?: number
           fuel_price?: number
           id?: boolean
+          line_notify_token?: string | null
           line_secret?: string | null
           line_token?: string | null
           rate_per_km?: number
@@ -105,6 +108,8 @@ export type Database = {
           province: string | null
           rate_per_km: number | null
           route_min: number | null
+          sales_items: Json
+          sales_total: number
           status: string
           time_in: string | null
           time_out: string | null
@@ -134,6 +139,8 @@ export type Database = {
           province?: string | null
           rate_per_km?: number | null
           route_min?: number | null
+          sales_items?: Json
+          sales_total?: number
           status?: string
           time_in?: string | null
           time_out?: string | null
@@ -163,6 +170,8 @@ export type Database = {
           province?: string | null
           rate_per_km?: number | null
           route_min?: number | null
+          sales_items?: Json
+          sales_total?: number
           status?: string
           time_in?: string | null
           time_out?: string | null
