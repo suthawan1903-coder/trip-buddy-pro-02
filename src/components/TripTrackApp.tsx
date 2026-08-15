@@ -1670,6 +1670,24 @@ function SettingsView({
           />
         </div>
 
+        <div>
+          <label className="text-sm font-medium block mb-1">
+            LINE token สำหรับส่งเข้ากลุ่ม (LINE Notify)
+          </label>
+          <textarea
+            value={form.lineNotifyToken}
+            disabled={disabled}
+            onChange={(e) => setForm({ ...form, lineNotifyToken: e.target.value })}
+            rows={2}
+            placeholder="วาง LINE Notify token ของกลุ่ม (เว้นว่าง = ใช้ Channel Access Token)"
+            className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs disabled:opacity-70"
+          />
+          <p className="text-[11px] text-slate-500 mt-1">
+            ใช้ในหน้า "ย้อนหลัง" เพื่อส่งสรุปยอดขาย/ค่าน้ำมันเข้ากลุ่ม LINE
+          </p>
+        </div>
+
+
         <button
           onClick={handleTest}
           disabled={testing}
