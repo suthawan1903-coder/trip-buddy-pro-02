@@ -56,7 +56,9 @@ export const updateAppSettings = createServerFn({ method: "POST" })
         checkin_radius_km: data.checkinRadiusKm,
         line_token: data.lineToken ?? "",
         line_secret: data.lineSecret ?? "",
+        line_notify_token: data.lineNotifyToken ?? "",
       })
+
       .eq("id", true);
     if (error) throw new Error(error.message);
     return { ok: true };
