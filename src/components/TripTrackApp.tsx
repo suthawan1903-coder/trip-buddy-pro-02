@@ -1256,8 +1256,95 @@ function FormView({
           </div>
 
 
+          {/* ===== DYNAMIC SALES ITEMS ===== */}
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-sm font-bold flex items-center gap-1.5">
+                <ShoppingCart size={16} className="text-emerald-600" /> สินค้าที่ขายได้
+              </label>
+              <button
+                type="button"
+                onClick={addSalesItem}
+                className="h-9 px-3 rounded-xl bg-emerald-600 text-white text-xs font-bold flex items-center gap-1"
+              >
+                <Plus size={14} /> เพิ่มรายการ
+              </button>
+            </div>
+
+            {formData.salesItems.length === 0 && (
+              <p className="text-[11px] text-slate-500">ยังไม่มีรายการ — กด "เพิ่มรายการ" เพื่อบันทึกสินค้าที่ขาย</p>
+            )}
+
+            {formData.salesItems.map((item, idx) => (
+              <div
+                key={item.id}
+                className="rounded-xl bg-slate-50 dark:bg-slate-900/60 p-2.5 space-y-2 border border-slate-200 dark:border-slate-700"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-slate-400 w-5">{idx + 1}.</span>
+                  <input
+                    value={item.name}
+                    onChange={(e) => updateSalesItem(item.id, { name: e.target.value })}
+                    placeholder="ชื่อสินค้า"
+                    className="flex-1 h-11 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 text-sm outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeSalesItem(item.id)}
+                    aria-label="ลบรายการสินค้า"
+                    className="h-11 w-11 grid place-items-center rounded-xl bg-red-50 dark:bg-red-950/40 text-red-600"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <label className="text-[10px] font-bold text-slate-500">
+                    จำนวน
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      value={item.qty}
+                      onChange={(e) =>
+                        updateSalesItem(item.id, { qty: parseFloat(e.target.value) || 0 })
+                      }
+                      className="mt-1 w-full h-11 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 text-sm outline-none"
+                    />
+                  </label>
+                  <label className="text-[10px] font-bold text-slate-500">
+                    ราคา/หน่วย (฿)
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.01"
+                      value={item.unitPrice}
+                      onChange={(e) =>
+                        updateSalesItem(item.id, { unitPrice: parseFloat(e.target.value) || 0 })
+                      }
+                      className="mt-1 w-full h-11 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 text-sm outline-none"
+                    />
+                  </label>
+                  <label className="text-[10px] font-bold text-slate-500">
+                    รวม
+                    <p className="mt-1 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-3 text-sm font-bold text-emerald-700 dark:text-emerald-300 flex items-center">
+                      {thb(lineTotal(item))}
+                    </p>
+                  </label>
+                </div>
+              </div>
+            ))}
+
+            {formData.salesItems.length > 0 && (
+              <p className="text-right text-sm font-extrabold">
+                ยอดขายรวม: <span className="text-emerald-600">{thb(totalSales)}</span>
+              </p>
+            )}
+          </div>
+
           <div>
             <label className="text-sm font-medium block mb-1">รายละเอียดงานเพิ่มเติม</label>
+
             <textarea
               name="job"
               value={formData.job}
