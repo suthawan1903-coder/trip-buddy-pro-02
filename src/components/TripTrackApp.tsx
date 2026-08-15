@@ -4,6 +4,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { useSession } from "@/hooks/use-session";
 import EmployeesView from "@/components/EmployeesView";
 import AdminTripsView from "@/components/AdminTripsView";
+import ReportsView from "@/components/ReportsView";
+
 import {
   LogOut,
   Users as UsersIcon,
