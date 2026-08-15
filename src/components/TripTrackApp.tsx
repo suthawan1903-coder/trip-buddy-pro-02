@@ -428,6 +428,8 @@ function FormView({
     timeIn: "",
     timeOut: "",
     jobTypes: [] as string[],
+    salesItems: [] as SalesItem[],
+
     job: "",
     images: [] as string[],
   });
