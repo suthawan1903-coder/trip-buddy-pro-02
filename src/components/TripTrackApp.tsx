@@ -4,6 +4,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { useSession } from "@/hooks/use-session";
 import EmployeesView from "@/components/EmployeesView";
 import AdminTripsView from "@/components/AdminTripsView";
+import ReportsView from "@/components/ReportsView";
+
 import {
   LogOut,
   Users as UsersIcon,
@@ -33,6 +35,11 @@ import {
   Store,
   Loader2,
   Globe2,
+  CalendarRange,
+  Plus,
+  Trash2,
+  ShoppingCart,
+
 } from "lucide-react";
 import { sendLineMessage } from "@/lib/line.functions";
 import { getAppSettings, updateAppSettings } from "@/lib/settings.functions";
@@ -41,6 +48,15 @@ import logoUrl from "@/assets/engcorp-logo.png";
 import InstallPrompt from "@/components/InstallPrompt";
 import { calculateFuelCost, tryCalculateFuelCost } from "@/lib/fuel-cost";
 import { compressImageFiles } from "@/lib/image-capture";
+import {
+  cleanSalesItems,
+  lineTotal,
+  newSalesItem,
+  salesTotal,
+  thb,
+  type SalesItem,
+} from "@/lib/sales";
+
 import { fetchPttFuelPrices, type FuelPrice } from "@/lib/fuel-price-client";
 import {
   fetchRoute,
@@ -102,6 +118,7 @@ type Trip = {
 export type AppSettings = {
   lineToken: string;
   lineSecret: string;
+  lineNotifyToken: string;
   fuelPrice: number;
   fuelEfficiency: number;
   ratePerKm: number;
@@ -111,18 +128,21 @@ export type AppSettings = {
 const DEFAULT_SETTINGS: AppSettings = {
   lineToken: "",
   lineSecret: "",
+  lineNotifyToken: "",
   fuelPrice: 38,
   fuelEfficiency: 12,
   ratePerKm: 0,
   checkinRadiusKm: 5,
 };
 
+
 export default function TripTrackApp() {
   const { profile, isAdmin, userId } = useSession();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<
-    "form" | "dashboard" | "settings" | "employees" | "admin"
+    "form" | "dashboard" | "settings" | "employees" | "admin" | "reports"
   >("form");
+
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
   const [trips, setTrips] = useState<Trip[]>([]);
@@ -305,9 +325,13 @@ export default function TripTrackApp() {
           />
         )}
         {activeTab === "admin" && isAdmin && <AdminTripsView showToast={showToast} />}
+        {activeTab === "reports" && isAdmin && (
+          <ReportsView showToast={showToast} lineNotifyToken={settings.lineNotifyToken || settings.lineToken} />
+        )}
         {activeTab === "employees" && isAdmin && (
           <EmployeesView showToast={showToast} currentUserId={userId} />
         )}
+
       </main>
 
       {toast && (
@@ -328,7 +352,11 @@ export default function TripTrackApp() {
           <NavButton icon={<ShieldCheck />} label="จัดการงาน" isActive={activeTab === "admin"} onClick={() => setActiveTab("admin")} />
         )}
         {isAdmin && (
+          <NavButton icon={<CalendarRange />} label="ย้อนหลัง" isActive={activeTab === "reports"} onClick={() => setActiveTab("reports")} />
+        )}
+        {isAdmin && (
           <NavButton icon={<UsersIcon />} label="พนักงาน" isActive={activeTab === "employees"} onClick={() => setActiveTab("employees")} />
+
         )}
         <NavButton icon={<SettingsIcon />} label="ตั้งค่า" isActive={activeTab === "settings"} onClick={() => setActiveTab("settings")} />
       </nav>
@@ -409,6 +437,8 @@ function FormView({
     timeIn: "",
     timeOut: "",
     jobTypes: [] as string[],
+    salesItems: [] as SalesItem[],
+
     job: "",
     images: [] as string[],
   });
@@ -758,7 +788,22 @@ function FormView({
   const handleRemoveImage = (idx: number) =>
     setFormData((prev) => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }));
 
+  /* ===== dynamic sales items ===== */
+  const totalSales = useMemo(() => salesTotal(formData.salesItems), [formData.salesItems]);
+
+  const setSalesItems = (items: SalesItem[]) => {
+    const next = { ...formData, salesItems: items };
+    setFormData(next);
+    saveDraftToLocal(next);
+  };
+  const addSalesItem = () => setSalesItems([...formData.salesItems, newSalesItem()]);
+  const removeSalesItem = (id: string) =>
+    setSalesItems(formData.salesItems.filter((i) => i.id !== id));
+  const updateSalesItem = (id: string, patch: Partial<SalesItem>) =>
+    setSalesItems(formData.salesItems.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+
   const toggleJobType = (job: string) => {
+
     const next = {
       ...formData,
       jobTypes: formData.jobTypes.includes(job)
@@ -806,6 +851,9 @@ function FormView({
           job: formData.job || null,
           job_type: formData.jobTypes.join(", ") || null,
           images: formData.images,
+          sales_items: cleanSalesItems(formData.salesItems),
+          sales_total: totalSales,
+
           status: "รออนุมัติ",
           lat: destPoint?.[0] ?? startPoint?.[0] ?? null,
           lng: destPoint?.[1] ?? startPoint?.[1] ?? null,
@@ -844,8 +892,10 @@ function FormView({
         dist: "",
         job: "",
         jobTypes: [],
+        salesItems: [],
         timeIn: "",
         timeOut: "",
+
         images: [],
       }));
       setDistance(0);
@@ -1237,8 +1287,95 @@ function FormView({
           </div>
 
 
+          {/* ===== DYNAMIC SALES ITEMS ===== */}
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-sm font-bold flex items-center gap-1.5">
+                <ShoppingCart size={16} className="text-emerald-600" /> สินค้าที่ขายได้
+              </label>
+              <button
+                type="button"
+                onClick={addSalesItem}
+                className="h-9 px-3 rounded-xl bg-emerald-600 text-white text-xs font-bold flex items-center gap-1"
+              >
+                <Plus size={14} /> เพิ่มรายการ
+              </button>
+            </div>
+
+            {formData.salesItems.length === 0 && (
+              <p className="text-[11px] text-slate-500">ยังไม่มีรายการ — กด "เพิ่มรายการ" เพื่อบันทึกสินค้าที่ขาย</p>
+            )}
+
+            {formData.salesItems.map((item, idx) => (
+              <div
+                key={item.id}
+                className="rounded-xl bg-slate-50 dark:bg-slate-900/60 p-2.5 space-y-2 border border-slate-200 dark:border-slate-700"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-slate-400 w-5">{idx + 1}.</span>
+                  <input
+                    value={item.name}
+                    onChange={(e) => updateSalesItem(item.id, { name: e.target.value })}
+                    placeholder="ชื่อสินค้า"
+                    className="flex-1 h-11 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 text-sm outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeSalesItem(item.id)}
+                    aria-label="ลบรายการสินค้า"
+                    className="h-11 w-11 grid place-items-center rounded-xl bg-red-50 dark:bg-red-950/40 text-red-600"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <label className="text-[10px] font-bold text-slate-500">
+                    จำนวน
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      value={item.qty}
+                      onChange={(e) =>
+                        updateSalesItem(item.id, { qty: parseFloat(e.target.value) || 0 })
+                      }
+                      className="mt-1 w-full h-11 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 text-sm outline-none"
+                    />
+                  </label>
+                  <label className="text-[10px] font-bold text-slate-500">
+                    ราคา/หน่วย (฿)
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.01"
+                      value={item.unitPrice}
+                      onChange={(e) =>
+                        updateSalesItem(item.id, { unitPrice: parseFloat(e.target.value) || 0 })
+                      }
+                      className="mt-1 w-full h-11 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 text-sm outline-none"
+                    />
+                  </label>
+                  <label className="text-[10px] font-bold text-slate-500">
+                    รวม
+                    <p className="mt-1 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-3 text-sm font-bold text-emerald-700 dark:text-emerald-300 flex items-center">
+                      {thb(lineTotal(item))}
+                    </p>
+                  </label>
+                </div>
+              </div>
+            ))}
+
+            {formData.salesItems.length > 0 && (
+              <p className="text-right text-sm font-extrabold">
+                ยอดขายรวม: <span className="text-emerald-600">{thb(totalSales)}</span>
+              </p>
+            )}
+          </div>
+
           <div>
             <label className="text-sm font-medium block mb-1">รายละเอียดงานเพิ่มเติม</label>
+
             <textarea
               name="job"
               value={formData.job}
@@ -1650,6 +1787,24 @@ function SettingsView({
             className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs disabled:opacity-70"
           />
         </div>
+
+        <div>
+          <label className="text-sm font-medium block mb-1">
+            LINE token สำหรับส่งเข้ากลุ่ม (LINE Notify)
+          </label>
+          <textarea
+            value={form.lineNotifyToken}
+            disabled={disabled}
+            onChange={(e) => setForm({ ...form, lineNotifyToken: e.target.value })}
+            rows={2}
+            placeholder="วาง LINE Notify token ของกลุ่ม (เว้นว่าง = ใช้ Channel Access Token)"
+            className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs disabled:opacity-70"
+          />
+          <p className="text-[11px] text-slate-500 mt-1">
+            ใช้ในหน้า "ย้อนหลัง" เพื่อส่งสรุปยอดขาย/ค่าน้ำมันเข้ากลุ่ม LINE
+          </p>
+        </div>
+
 
         <button
           onClick={handleTest}
