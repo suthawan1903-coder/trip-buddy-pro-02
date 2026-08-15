@@ -309,9 +309,13 @@ export default function TripTrackApp() {
           />
         )}
         {activeTab === "admin" && isAdmin && <AdminTripsView showToast={showToast} />}
+        {activeTab === "reports" && isAdmin && (
+          <ReportsView showToast={showToast} lineNotifyToken={settings.lineNotifyToken || settings.lineToken} />
+        )}
         {activeTab === "employees" && isAdmin && (
           <EmployeesView showToast={showToast} currentUserId={userId} />
         )}
+
       </main>
 
       {toast && (
