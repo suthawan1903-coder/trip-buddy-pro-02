@@ -779,7 +779,22 @@ function FormView({
   const handleRemoveImage = (idx: number) =>
     setFormData((prev) => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }));
 
+  /* ===== dynamic sales items ===== */
+  const totalSales = useMemo(() => salesTotal(formData.salesItems), [formData.salesItems]);
+
+  const setSalesItems = (items: SalesItem[]) => {
+    const next = { ...formData, salesItems: items };
+    setFormData(next);
+    saveDraftToLocal(next);
+  };
+  const addSalesItem = () => setSalesItems([...formData.salesItems, newSalesItem()]);
+  const removeSalesItem = (id: string) =>
+    setSalesItems(formData.salesItems.filter((i) => i.id !== id));
+  const updateSalesItem = (id: string, patch: Partial<SalesItem>) =>
+    setSalesItems(formData.salesItems.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+
   const toggleJobType = (job: string) => {
+
     const next = {
       ...formData,
       jobTypes: formData.jobTypes.includes(job)
