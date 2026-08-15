@@ -102,6 +102,7 @@ type Trip = {
 export type AppSettings = {
   lineToken: string;
   lineSecret: string;
+  lineNotifyToken: string;
   fuelPrice: number;
   fuelEfficiency: number;
   ratePerKm: number;
@@ -111,11 +112,13 @@ export type AppSettings = {
 const DEFAULT_SETTINGS: AppSettings = {
   lineToken: "",
   lineSecret: "",
+  lineNotifyToken: "",
   fuelPrice: 38,
   fuelEfficiency: 12,
   ratePerKm: 0,
   checkinRadiusKm: 5,
 };
+
 
 export default function TripTrackApp() {
   const { profile, isAdmin, userId } = useSession();
