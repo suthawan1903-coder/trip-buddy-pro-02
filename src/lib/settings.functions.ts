@@ -10,7 +10,10 @@ const settingsSchema = z.object({
   lineToken: z.string().max(4000).optional(),
   lineSecret: z.string().max(500).optional(),
   lineNotifyToken: z.string().max(4000).optional(),
+  lineGroupId: z.string().max(200).optional(),
+  lineUserId: z.string().max(200).optional(),
 });
+
 
 /** Global settings, readable by every signed-in employee. */
 export const getAppSettings = createServerFn({ method: "GET" })
