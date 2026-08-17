@@ -1,48 +1,7 @@
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => void load()}
-            disabled={loading}
-            className="h-11 rounded-xl bg-slate-900 dark:bg-white dark:text-slate-900 text-white text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60"
-          >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} ค้นหา
-          </button>
-          <button
-            onClick={exportExcel}
-            className="h-11 rounded-xl bg-emerald-600 text-white text-xs font-bold flex items-center justify-center gap-1"
-          >
-            <Download size={14} /> Excel
-          </button>
-          <button
-            onClick={() => void sendReport("group")}
-            disabled={sending !== null}
-            className="h-11 rounded-xl bg-[#06C755] text-white text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60"
-          >
-            {sending === "group" ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <Users size={14} />
-            )}{" "}
-            แจ้งเตือนกลุ่ม LINE
-          </button>
-          <button
-            onClick={() => void sendReport("personal")}
-            disabled={sending !== null}
-            className="h-11 rounded-xl bg-[#06C755]/85 text-white text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60"
-          >
-            {sending === "personal" ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <User size={14} />
-            )}{" "}
-            แจ้งเตือนส่วนตัว
-          </button>
-        </div>
-      </div>
-
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import * as XLSX from "xlsx";
-import { CalendarRange, Download, Loader2, RefreshCw, Send, User, Users } from "lucide-react";
+import { CalendarRange, Download, Loader2, RefreshCw, User, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { notifyReport } from "@/lib/line.functions";
 import { formatMinutes, utcDateString } from "@/lib/geo";
@@ -299,7 +258,7 @@ export default function ReportsView({
           ))}
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <button
             onClick={() => void load()}
             disabled={loading}
@@ -314,11 +273,28 @@ export default function ReportsView({
             <Download size={14} /> Excel
           </button>
           <button
-            onClick={() => void sendToGroup()}
-            disabled={sending}
+            onClick={() => void sendReport("group")}
+            disabled={sending !== null}
             className="h-11 rounded-xl bg-[#06C755] text-white text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60"
           >
-            {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} LINE
+            {sending === "group" ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Users size={14} />
+            )}{" "}
+            แจ้งเตือนกลุ่ม LINE
+          </button>
+          <button
+            onClick={() => void sendReport("personal")}
+            disabled={sending !== null}
+            className="h-11 rounded-xl bg-[#06C755]/85 text-white text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60"
+          >
+            {sending === "personal" ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <User size={14} />
+            )}{" "}
+            แจ้งเตือนส่วนตัว
           </button>
         </div>
       </div>
