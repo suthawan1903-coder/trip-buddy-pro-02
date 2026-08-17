@@ -22,7 +22,7 @@ export const getAppSettings = createServerFn({ method: "GET" })
     const { data, error } = await context.supabase
       .from("app_settings")
       .select(
-        "fuel_price, fuel_efficiency, rate_per_km, checkin_radius_km, line_token, line_secret, line_notify_token",
+        "fuel_price, fuel_efficiency, rate_per_km, checkin_radius_km, line_token, line_secret, line_notify_token, line_group_id, line_user_id",
       )
       .maybeSingle();
     if (error) throw new Error(error.message);
@@ -34,8 +34,11 @@ export const getAppSettings = createServerFn({ method: "GET" })
       lineToken: data?.line_token ?? "",
       lineSecret: data?.line_secret ?? "",
       lineNotifyToken: data?.line_notify_token ?? "",
+      lineGroupId: data?.line_group_id ?? "",
+      lineUserId: data?.line_user_id ?? "",
     };
   });
+
 
 
 /** Admin-only write of the global settings. */
