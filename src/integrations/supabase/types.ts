@@ -21,9 +21,11 @@ export type Database = {
           fuel_efficiency: number
           fuel_price: number
           id: boolean
+          line_group_id: string
           line_notify_token: string | null
           line_secret: string | null
           line_token: string | null
+          line_user_id: string
           rate_per_km: number
           updated_at: string
         }
@@ -33,9 +35,11 @@ export type Database = {
           fuel_efficiency?: number
           fuel_price?: number
           id?: boolean
+          line_group_id?: string
           line_notify_token?: string | null
           line_secret?: string | null
           line_token?: string | null
+          line_user_id?: string
           rate_per_km?: number
           updated_at?: string
         }
@@ -45,9 +49,11 @@ export type Database = {
           fuel_efficiency?: number
           fuel_price?: number
           id?: boolean
+          line_group_id?: string
           line_notify_token?: string | null
           line_secret?: string | null
           line_token?: string | null
+          line_user_id?: string
           rate_per_km?: number
           updated_at?: string
         }

@@ -10,7 +10,10 @@ const settingsSchema = z.object({
   lineToken: z.string().max(4000).optional(),
   lineSecret: z.string().max(500).optional(),
   lineNotifyToken: z.string().max(4000).optional(),
+  lineGroupId: z.string().max(200).optional(),
+  lineUserId: z.string().max(200).optional(),
 });
+
 
 /** Global settings, readable by every signed-in employee. */
 export const getAppSettings = createServerFn({ method: "GET" })
@@ -19,7 +22,7 @@ export const getAppSettings = createServerFn({ method: "GET" })
     const { data, error } = await context.supabase
       .from("app_settings")
       .select(
-        "fuel_price, fuel_efficiency, rate_per_km, checkin_radius_km, line_token, line_secret, line_notify_token",
+        "fuel_price, fuel_efficiency, rate_per_km, checkin_radius_km, line_token, line_secret, line_notify_token, line_group_id, line_user_id",
       )
       .maybeSingle();
     if (error) throw new Error(error.message);
@@ -31,8 +34,11 @@ export const getAppSettings = createServerFn({ method: "GET" })
       lineToken: data?.line_token ?? "",
       lineSecret: data?.line_secret ?? "",
       lineNotifyToken: data?.line_notify_token ?? "",
+      lineGroupId: data?.line_group_id ?? "",
+      lineUserId: data?.line_user_id ?? "",
     };
   });
+
 
 
 /** Admin-only write of the global settings. */
@@ -57,6 +63,9 @@ export const updateAppSettings = createServerFn({ method: "POST" })
         line_token: data.lineToken ?? "",
         line_secret: data.lineSecret ?? "",
         line_notify_token: data.lineNotifyToken ?? "",
+        line_group_id: data.lineGroupId ?? "",
+        line_user_id: data.lineUserId ?? "",
+
       })
 
       .eq("id", true);

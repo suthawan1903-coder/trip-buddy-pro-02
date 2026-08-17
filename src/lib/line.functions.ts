@@ -83,3 +83,68 @@ export const sendLineGroupSummary = createServerFn({ method: "POST" })
     }
     return { ok: true, channel: "notify" as const };
   });
+
+/**
+ * /api/notify-report equivalent (TanStack server function — this stack has no Express server).
+ * ส่งรายงานผ่าน LINE Messaging API Push Message
+ *  - targetType === "group"    → push ไปยัง groupId (ต้องเชิญ OA เข้ากลุ่ม และเปิด "Allow bot to join group chats")
+ *  - targetType === "personal" → push ไปยัง userId (ผู้ใช้ต้องเป็นเพื่อนกับ OA)
+ */
+export const notifyReport = createServerFn({ method: "POST" })
+  .inputValidator(
+    (input: {
+      accessToken: string;
+      targetType: "group" | "personal";
+      targetId: string;
+      message: string;
+    }) => {
+      if (!input?.accessToken?.trim()) throw new Error("ยังไม่ได้ตั้งค่า Channel access token");
+      if (input?.targetType !== "group" && input?.targetType !== "personal")
+        throw new Error("targetType ต้องเป็น 'group' หรือ 'personal'");
+      if (!input?.targetId?.trim())
+        throw new Error(
+          input.targetType === "group"
+            ? "ยังไม่ได้ตั้งค่า Group ID"
+            : "ยังไม่ได้ตั้งค่า User ID",
+        );
+      if (!input?.message?.trim()) throw new Error("ข้อความว่างเปล่า");
+      if (input.message.length > 4900) throw new Error("ข้อความยาวเกิน 4,900 ตัวอักษร");
+      return input;
+    },
+  )
+  .handler(async ({ data }) => {
+    const { accessToken, targetType, targetId, message } = data;
+
+    // groupId ต้องขึ้นต้นด้วย "C" (หรือ "R" สำหรับ multi-person room), userId ขึ้นต้นด้วย "U"
+    if (targetType === "group" && !/^[CR]/.test(targetId))
+      throw new Error("Group ID ต้องขึ้นต้นด้วย C (หรือ R) — ดูได้จาก webhook event source.groupId");
+    if (targetType === "personal" && !/^U/.test(targetId))
+      throw new Error("User ID ต้องขึ้นต้นด้วย U — ดูได้จาก webhook event source.userId");
+
+    const res = await fetch("https://api.line.me/v2/bot/message/push", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+        // กัน push ซ้ำเมื่อ retry
+        "X-Line-Retry-Key":
+          typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : "",
+      },
+      body: JSON.stringify({
+        to: targetId, // ← groupId เมื่อ group, userId เมื่อ personal
+        messages: [{ type: "text", text: message }],
+      }),
+    });
+
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      if (res.status === 403)
+        throw new Error(
+          "LINE 403: บัญชี OA ไม่มีสิทธิ์ส่ง push (ตรวจสอบว่า OA อยู่ในกลุ่ม/เป็นเพื่อน และแผนรองรับ push message)",
+        );
+      if (res.status === 400)
+        throw new Error(`LINE 400: ปลายทางไม่ถูกต้อง (${detail.slice(0, 180)})`);
+      throw new Error(`LINE Push ${res.status}: ${detail.slice(0, 200)}`);
+    }
+    return { ok: true, targetType };
+  });

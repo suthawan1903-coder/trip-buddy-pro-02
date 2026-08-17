@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import * as XLSX from "xlsx";
-import { CalendarRange, Download, Loader2, RefreshCw, Send } from "lucide-react";
+import { CalendarRange, Download, Loader2, RefreshCw, User, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { sendLineGroupSummary } from "@/lib/line.functions";
+import { notifyReport } from "@/lib/line.functions";
 import { formatMinutes, utcDateString } from "@/lib/geo";
 import { thb } from "@/lib/sales";
 
@@ -35,18 +35,23 @@ const daysAgo = (n: number) => {
 
 export default function ReportsView({
   showToast,
-  lineNotifyToken,
+  accessToken,
+  groupId,
+  personalUserId,
 }: {
   showToast: (m: string, t?: string) => void;
-  lineNotifyToken: string;
+  lineNotifyToken?: string;
+  accessToken: string;
+  groupId: string;
+  personalUserId: string;
 }) {
   const [from, setFrom] = useState(daysAgo(6));
   const [to, setTo] = useState(utcDateString());
   const [employee, setEmployee] = useState("");
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [sending, setSending] = useState(false);
-  const notify = useServerFn(sendLineGroupSummary);
+  const [sending, setSending] = useState<"group" | "personal" | null>(null);
+  const notify = useServerFn(notifyReport);
 
   const load = useCallback(async () => {
     if (from > to) {
@@ -163,17 +168,31 @@ export default function ReportsView({
     return lines.join("\n");
   };
 
-  const sendToGroup = async () => {
-    if (!lineNotifyToken) return showToast("ยังไม่ได้ตั้งค่า LINE token ในหน้าตั้งค่า", "error");
+  /** เรียก backend push endpoint ตาม targetType ที่ผู้ใช้กด */
+  const sendReport = async (targetType: "group" | "personal") => {
+    if (!accessToken) return showToast("ยังไม่ได้ตั้งค่า Channel access token ในหน้าตั้งค่า", "error");
+    const targetId = targetType === "group" ? groupId : personalUserId;
+    if (!targetId)
+      return showToast(
+        targetType === "group"
+          ? "ยังไม่ได้ตั้งค่า Group ID ในหน้าตั้งค่า"
+          : "ยังไม่ได้ตั้งค่า User ID ในหน้าตั้งค่า",
+        "error",
+      );
     if (rows.length === 0) return showToast("ไม่มีข้อมูลให้ส่ง", "error");
-    setSending(true);
+
+    setSending(targetType);
     try {
-      await notify({ data: { token: lineNotifyToken, message: summaryText() } });
-      showToast("ส่งสรุปเข้ากลุ่ม LINE เรียบร้อย ✅");
+      await notify({
+        data: { accessToken, targetType, targetId, message: summaryText() },
+      });
+      showToast(
+        targetType === "group" ? "ส่งรายงานเข้ากลุ่ม LINE แล้ว ✅" : "ส่งรายงานแบบส่วนตัวแล้ว ✅",
+      );
     } catch (e: any) {
       showToast(`ส่งไม่สำเร็จ: ${e?.message || "unknown"}`, "error");
     } finally {
-      setSending(false);
+      setSending(null);
     }
   };
 
@@ -239,7 +258,7 @@ export default function ReportsView({
           ))}
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <button
             onClick={() => void load()}
             disabled={loading}
@@ -254,11 +273,28 @@ export default function ReportsView({
             <Download size={14} /> Excel
           </button>
           <button
-            onClick={() => void sendToGroup()}
-            disabled={sending}
+            onClick={() => void sendReport("group")}
+            disabled={sending !== null}
             className="h-11 rounded-xl bg-[#06C755] text-white text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60"
           >
-            {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} LINE
+            {sending === "group" ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Users size={14} />
+            )}{" "}
+            แจ้งเตือนกลุ่ม LINE
+          </button>
+          <button
+            onClick={() => void sendReport("personal")}
+            disabled={sending !== null}
+            className="h-11 rounded-xl bg-[#06C755]/85 text-white text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60"
+          >
+            {sending === "personal" ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <User size={14} />
+            )}{" "}
+            แจ้งเตือนส่วนตัว
           </button>
         </div>
       </div>

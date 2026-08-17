@@ -54,8 +54,10 @@ import {
   newSalesItem,
   salesTotal,
   thb,
+  PRODUCT_OPTIONS,
   type SalesItem,
 } from "@/lib/sales";
+
 
 import { fetchPttFuelPrices, type FuelPrice } from "@/lib/fuel-price-client";
 import {
@@ -119,6 +121,8 @@ export type AppSettings = {
   lineToken: string;
   lineSecret: string;
   lineNotifyToken: string;
+  lineGroupId: string;
+  lineUserId: string;
   fuelPrice: number;
   fuelEfficiency: number;
   ratePerKm: number;
@@ -129,6 +133,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   lineToken: "",
   lineSecret: "",
   lineNotifyToken: "",
+  lineGroupId: "",
+  lineUserId: "",
   fuelPrice: 38,
   fuelEfficiency: 12,
   ratePerKm: 0,
@@ -326,7 +332,13 @@ export default function TripTrackApp() {
         )}
         {activeTab === "admin" && isAdmin && <AdminTripsView showToast={showToast} />}
         {activeTab === "reports" && isAdmin && (
-          <ReportsView showToast={showToast} lineNotifyToken={settings.lineNotifyToken || settings.lineToken} />
+          <ReportsView
+            showToast={showToast}
+            lineNotifyToken={settings.lineNotifyToken || settings.lineToken}
+            accessToken={settings.lineToken}
+            groupId={settings.lineGroupId}
+            personalUserId={settings.lineUserId}
+          />
         )}
         {activeTab === "employees" && isAdmin && (
           <EmployeesView showToast={showToast} currentUserId={userId} />
@@ -1313,12 +1325,25 @@ function FormView({
               >
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] font-bold text-slate-400 w-5">{idx + 1}.</span>
-                  <input
-                    value={item.name}
-                    onChange={(e) => updateSalesItem(item.id, { name: e.target.value })}
-                    placeholder="ชื่อสินค้า"
-                    className="flex-1 h-11 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 text-sm outline-none"
-                  />
+                  <div className="flex-1 grid grid-cols-2 gap-2">
+                    {PRODUCT_OPTIONS.map((p) => {
+                      const active = item.name === p;
+                      return (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => updateSalesItem(item.id, { name: p })}
+                          className={`h-11 rounded-xl text-sm font-bold border transition ${
+                            active
+                              ? "bg-emerald-600 text-white border-emerald-600"
+                              : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      );
+                    })}
+                  </div>
                   <button
                     type="button"
                     onClick={() => removeSalesItem(item.id)}
@@ -1328,6 +1353,7 @@ function FormView({
                     <Trash2 size={16} />
                   </button>
                 </div>
+
                 <div className="grid grid-cols-3 gap-2">
                   <label className="text-[10px] font-bold text-slate-500">
                     จำนวน
@@ -1804,6 +1830,35 @@ function SettingsView({
             ใช้ในหน้า "ย้อนหลัง" เพื่อส่งสรุปยอดขาย/ค่าน้ำมันเข้ากลุ่ม LINE
           </p>
         </div>
+
+        <div className="grid grid-cols-1 gap-3">
+          <div>
+            <label className="text-sm font-medium block mb-1">Group ID (ปลายทาง "แจ้งกลุ่ม")</label>
+            <input
+              type="text"
+              value={form.lineGroupId}
+              disabled={disabled}
+              onChange={(e) => setForm({ ...form, lineGroupId: e.target.value })}
+              placeholder="Cxxxxxxxxxxxxxxxx"
+              className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs disabled:opacity-70"
+            />
+            <p className="text-[11px] text-slate-500 mt-1">
+              ต้องเชิญ LINE OA เข้ากลุ่ม และเปิด "Allow bot to join group chats" แล้วอ่าน groupId จาก webhook
+            </p>
+          </div>
+          <div>
+            <label className="text-sm font-medium block mb-1">User ID (ปลายทาง "แจ้งส่วนตัว")</label>
+            <input
+              type="text"
+              value={form.lineUserId}
+              disabled={disabled}
+              onChange={(e) => setForm({ ...form, lineUserId: e.target.value })}
+              placeholder="Uxxxxxxxxxxxxxxxx"
+              className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs disabled:opacity-70"
+            />
+          </div>
+        </div>
+
 
 
         <button

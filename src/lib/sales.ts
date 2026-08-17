@@ -1,20 +1,26 @@
-/** Sales item model used by the dynamic "สินค้าที่ขาย" section of the job form. */
+/** Sales item model used by the fixed-choice "สินค้าที่ขาย" section of the job form. */
+
+/** Only these two products can be sold — no free text allowed. */
+export const PRODUCT_OPTIONS = ["Handset", "SIM"] as const;
+export type ProductName = (typeof PRODUCT_OPTIONS)[number];
+
 export type SalesItem = {
   id: string;
-  name: string;
+  name: ProductName;
   qty: number;
   unitPrice: number;
 };
 
-export const newSalesItem = (): SalesItem => ({
+export const newSalesItem = (name: ProductName = "Handset"): SalesItem => ({
   id:
     typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
       : `si_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-  name: "",
+  name,
   qty: 1,
   unitPrice: 0,
 });
+
 
 /** Row total = qty * unitPrice (never NaN / negative). */
 export const lineTotal = (item: Pick<SalesItem, "qty" | "unitPrice">): number => {
