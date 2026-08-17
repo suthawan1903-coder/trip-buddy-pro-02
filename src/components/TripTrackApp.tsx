@@ -54,8 +54,10 @@ import {
   newSalesItem,
   salesTotal,
   thb,
+  PRODUCT_OPTIONS,
   type SalesItem,
 } from "@/lib/sales";
+
 
 import { fetchPttFuelPrices, type FuelPrice } from "@/lib/fuel-price-client";
 import {
