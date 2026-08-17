@@ -63,6 +63,9 @@ export const updateAppSettings = createServerFn({ method: "POST" })
         line_token: data.lineToken ?? "",
         line_secret: data.lineSecret ?? "",
         line_notify_token: data.lineNotifyToken ?? "",
+        line_group_id: data.lineGroupId ?? "",
+        line_user_id: data.lineUserId ?? "",
+
       })
 
       .eq("id", true);
