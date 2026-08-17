@@ -121,6 +121,8 @@ export type AppSettings = {
   lineToken: string;
   lineSecret: string;
   lineNotifyToken: string;
+  lineGroupId: string;
+  lineUserId: string;
   fuelPrice: number;
   fuelEfficiency: number;
   ratePerKm: number;
@@ -131,6 +133,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   lineToken: "",
   lineSecret: "",
   lineNotifyToken: "",
+  lineGroupId: "",
+  lineUserId: "",
   fuelPrice: 38,
   fuelEfficiency: 12,
   ratePerKm: 0,
@@ -328,7 +332,13 @@ export default function TripTrackApp() {
         )}
         {activeTab === "admin" && isAdmin && <AdminTripsView showToast={showToast} />}
         {activeTab === "reports" && isAdmin && (
-          <ReportsView showToast={showToast} lineNotifyToken={settings.lineNotifyToken || settings.lineToken} />
+          <ReportsView
+            showToast={showToast}
+            lineNotifyToken={settings.lineNotifyToken || settings.lineToken}
+            accessToken={settings.lineToken}
+            groupId={settings.lineGroupId}
+            personalUserId={settings.lineUserId}
+          />
         )}
         {activeTab === "employees" && isAdmin && (
           <EmployeesView showToast={showToast} currentUserId={userId} />
