@@ -1831,6 +1831,35 @@ function SettingsView({
           </p>
         </div>
 
+        <div className="grid grid-cols-1 gap-3">
+          <div>
+            <label className="text-sm font-medium block mb-1">Group ID (ปลายทาง "แจ้งกลุ่ม")</label>
+            <input
+              type="text"
+              value={form.lineGroupId}
+              disabled={disabled}
+              onChange={(e) => setForm({ ...form, lineGroupId: e.target.value })}
+              placeholder="Cxxxxxxxxxxxxxxxx"
+              className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs disabled:opacity-70"
+            />
+            <p className="text-[11px] text-slate-500 mt-1">
+              ต้องเชิญ LINE OA เข้ากลุ่ม และเปิด "Allow bot to join group chats" แล้วอ่าน groupId จาก webhook
+            </p>
+          </div>
+          <div>
+            <label className="text-sm font-medium block mb-1">User ID (ปลายทาง "แจ้งส่วนตัว")</label>
+            <input
+              type="text"
+              value={form.lineUserId}
+              disabled={disabled}
+              onChange={(e) => setForm({ ...form, lineUserId: e.target.value })}
+              placeholder="Uxxxxxxxxxxxxxxxx"
+              className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs disabled:opacity-70"
+            />
+          </div>
+        </div>
+
+
 
         <button
           onClick={handleTest}
