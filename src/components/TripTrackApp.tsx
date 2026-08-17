@@ -1313,12 +1313,25 @@ function FormView({
               >
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] font-bold text-slate-400 w-5">{idx + 1}.</span>
-                  <input
-                    value={item.name}
-                    onChange={(e) => updateSalesItem(item.id, { name: e.target.value })}
-                    placeholder="ชื่อสินค้า"
-                    className="flex-1 h-11 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 text-sm outline-none"
-                  />
+                  <div className="flex-1 grid grid-cols-2 gap-2">
+                    {PRODUCT_OPTIONS.map((p) => {
+                      const active = item.name === p;
+                      return (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => updateSalesItem(item.id, { name: p })}
+                          className={`h-11 rounded-xl text-sm font-bold border transition ${
+                            active
+                              ? "bg-emerald-600 text-white border-emerald-600"
+                              : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      );
+                    })}
+                  </div>
                   <button
                     type="button"
                     onClick={() => removeSalesItem(item.id)}
@@ -1328,6 +1341,7 @@ function FormView({
                     <Trash2 size={16} />
                   </button>
                 </div>
+
                 <div className="grid grid-cols-3 gap-2">
                   <label className="text-[10px] font-bold text-slate-500">
                     จำนวน
