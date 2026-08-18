@@ -106,7 +106,10 @@ type Trip = {
   id: string;
   date: string;
   employeeName: string;
+  employeePosition?: string | null;
   place: string;
+  province?: string | null;
+  district?: string | null;
   timeIn: string;
   timeOut: string;
   dist: string | number;
@@ -115,7 +118,10 @@ type Trip = {
   durationMin?: number | null;
   jobType?: string | null;
   job?: string | null;
+  salesItems?: { name: string; qty: number; unitPrice?: number; total: number }[] | null;
+  salesTotal?: number | null;
 };
+
 
 export type AppSettings = {
   lineToken: string;
