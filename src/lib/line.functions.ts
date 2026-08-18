@@ -148,3 +148,76 @@ export const notifyReport = createServerFn({ method: "POST" })
     }
     return { ok: true, targetType };
   });
+
+/**
+ * ส่งรายงานแบบละเอียดด้วย LINE Flex Message
+ * targetType: "group" (push → groupId) | "personal" (push → userId) | "broadcast" (ผู้ติดตาม OA ทุกคน)
+ * payload ที่ส่งไป LINE:
+ *   { to, messages: [{ type: "flex", altText, contents: <bubble> }] }
+ */
+export const notifyFlexReport = createServerFn({ method: "POST" })
+  .inputValidator(
+    (input: {
+      accessToken: string;
+      targetType: "group" | "personal" | "broadcast";
+      targetId?: string;
+      altText: string;
+      flex: unknown;
+      fallbackText?: string;
+    }) => {
+      if (!input?.accessToken?.trim()) throw new Error("ยังไม่ได้ตั้งค่า Channel access token");
+      if (!["group", "personal", "broadcast"].includes(input?.targetType))
+        throw new Error("targetType ต้องเป็น 'group' | 'personal' | 'broadcast'");
+      if (input.targetType !== "broadcast" && !input?.targetId?.trim())
+        throw new Error(
+          input.targetType === "group" ? "ยังไม่ได้ตั้งค่า Group ID" : "ยังไม่ได้ตั้งค่า User ID",
+        );
+      if (!input?.altText?.trim()) throw new Error("ข้อความว่างเปล่า");
+      if (!input?.flex) throw new Error("ไม่มีเนื้อหา Flex Message");
+      return input;
+    },
+  )
+  .handler(async ({ data }) => {
+    const { accessToken, targetType, targetId, altText, flex, fallbackText } = data;
+
+    if (targetType === "group" && !/^[CR]/.test(targetId ?? ""))
+      throw new Error("Group ID ต้องขึ้นต้นด้วย C (หรือ R) — ดูได้จาก webhook event source.groupId");
+    if (targetType === "personal" && !/^U/.test(targetId ?? ""))
+      throw new Error("User ID ต้องขึ้นต้นด้วย U — ดูได้จาก webhook event source.userId");
+
+    const messages: unknown[] = [
+      { type: "flex", altText: altText.slice(0, 400), contents: flex },
+    ];
+    if (fallbackText?.trim())
+      messages.push({ type: "text", text: fallbackText.slice(0, 4900) });
+
+    const endpoint =
+      targetType === "broadcast"
+        ? "https://api.line.me/v2/bot/message/broadcast"
+        : "https://api.line.me/v2/bot/message/push";
+
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+        "X-Line-Retry-Key":
+          typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : "",
+      },
+      body: JSON.stringify(
+        targetType === "broadcast" ? { messages } : { to: targetId, messages },
+      ),
+    });
+
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      if (res.status === 403)
+        throw new Error(
+          "LINE 403: OA ไม่มีสิทธิ์ส่ง push (ตรวจว่า OA อยู่ในกลุ่ม/เป็นเพื่อน และแผนรองรับ push)",
+        );
+      if (res.status === 400)
+        throw new Error(`LINE 400: payload/ปลายทางไม่ถูกต้อง (${detail.slice(0, 180)})`);
+      throw new Error(`LINE ${res.status}: ${detail.slice(0, 200)}`);
+    }
+    return { ok: true, targetType };
+  });

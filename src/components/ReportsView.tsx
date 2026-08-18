@@ -3,7 +3,14 @@ import { useServerFn } from "@tanstack/react-start";
 import * as XLSX from "xlsx";
 import { CalendarRange, Download, Loader2, RefreshCw, User, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { notifyReport } from "@/lib/line.functions";
+import { notifyFlexReport } from "@/lib/line.functions";
+import {
+  buildExcelAoa,
+  buildReportFlex,
+  buildReportText,
+  EXCEL_COL_WIDTHS,
+  type ReportTrip,
+} from "@/lib/report-format";
 import { formatMinutes, utcDateString } from "@/lib/geo";
 import { thb } from "@/lib/sales";
 
@@ -51,7 +58,7 @@ export default function ReportsView({
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState<"group" | "personal" | null>(null);
-  const notify = useServerFn(notifyReport);
+  const notify = useServerFn(notifyFlexReport);
 
   const load = useCallback(async () => {
     if (from > to) {
@@ -92,83 +99,54 @@ export default function ReportsView({
     return { distance, cost, sales, minutes, staff, checkins: rows.length };
   }, [rows]);
 
+  const reportTrips: ReportTrip[] = useMemo(
+    () =>
+      rows.map((r) => ({
+        date: r.trip_date,
+        employeeName: r.employee_name,
+        employeePosition: r.employee_position ?? "",
+        place: r.place,
+        province: r.province ?? "",
+        district: r.district ?? "",
+        timeIn: r.time_in ?? "",
+        timeOut: r.time_out ?? "",
+        dist: Number(r.distance) || 0,
+        cost: Number(r.cost) || 0,
+        durationMin: r.duration_min ?? null,
+        jobType: r.job_type ?? "",
+        job: r.job ?? "",
+        status: r.status,
+        salesItems: r.sales_items ?? [],
+        salesTotal: Number(r.sales_total) || 0,
+      })),
+    [rows],
+  );
+
   const exportExcel = () => {
     if (rows.length === 0) return showToast("ไม่มีข้อมูลให้ส่งออก", "error");
-
-    const sheetRows = rows.map((r) => ({
-      วันที่: r.trip_date,
-      พนักงาน: r.employee_name,
-      ตำแหน่ง: r.employee_position ?? "",
-      ร้านค้า: r.place,
-      จังหวัด: r.province ?? "",
-      อำเภอ: r.district ?? "",
-      เวลาเข้า: r.time_in ?? "",
-      เวลาออก: r.time_out ?? "",
-      "ระยะเวลา (นาที)": Number(r.duration_min ?? 0),
-      "ระยะทาง (กม.)": Number(r.distance ?? 0),
-      "ค่าเดินทาง (บาท)": Number(r.cost ?? 0),
-      "ยอดขาย (บาท)": Number(r.sales_total ?? 0),
-      ประเภทงาน: r.job_type ?? "",
-      รายละเอียดงาน: r.job ?? "",
-      สถานะ: r.status,
-      สินค้าที่ขาย: (r.sales_items ?? [])
-        .map((i) => `${i.name} x${i.qty} = ${i.total}`)
-        .join(" | "),
-    }));
-
-    const wsMain = XLSX.utils.json_to_sheet(sheetRows);
-    wsMain["!cols"] = [
-      { wch: 12 }, { wch: 18 }, { wch: 14 }, { wch: 26 }, { wch: 12 }, { wch: 14 },
-      { wch: 10 }, { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 14 },
-      { wch: 22 }, { wch: 34 }, { wch: 12 }, { wch: 40 },
-    ];
-
-    const wsSummary = XLSX.utils.aoa_to_sheet([
-      ["สรุปรายงานการปฏิบัติงาน — EJH Check In"],
-      ["ช่วงวันที่", `${from} ถึง ${to}`],
-      ["จำนวนพนักงาน", totals.staff],
-      ["จำนวนเช็คอิน (ร้าน)", totals.checkins],
-      ["ระยะทางรวม (กม.)", Number(totals.distance.toFixed(2))],
-      ["ค่าเดินทางรวม (บาท)", Number(totals.cost.toFixed(2))],
-      ["ยอดขายรวม (บาท)", Number(totals.sales.toFixed(2))],
-      ["เวลาปฏิบัติงานรวม", formatMinutes(totals.minutes)],
-    ]);
-    wsSummary["!cols"] = [{ wch: 26 }, { wch: 28 }];
-
+    const aoa = buildExcelAoa({
+      title: "รายงานสรุปการทำงาน — EJH Check In",
+      rangeLabel: `${from} ถึง ${to}`,
+      employeeName: employee,
+      trips: reportTrips,
+    });
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = EXCEL_COL_WIDTHS;
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, wsSummary, "สรุป");
-    XLSX.utils.book_append_sheet(wb, wsMain, "รายการงาน");
+    XLSX.utils.book_append_sheet(wb, ws, "รายงาน");
     XLSX.writeFile(wb, `EJH-report_${from}_${to}.xlsx`);
     showToast("ส่งออกไฟล์ Excel เรียบร้อย ✅");
   };
 
-  const summaryText = () => {
-    const byStaff = new Map<string, { cost: number; sales: number; count: number }>();
-    for (const r of rows) {
-      const cur = byStaff.get(r.employee_name) ?? { cost: 0, sales: 0, count: 0 };
-      cur.cost += Number(r.cost || 0);
-      cur.sales += Number(r.sales_total || 0);
-      cur.count += 1;
-      byStaff.set(r.employee_name, cur);
-    }
-    const lines = [
-      "📊 สรุปรายงาน EJH Check In",
-      `🗓 ช่วงวันที่: ${from} ถึง ${to}`,
-      `🏪 เช็คอิน: ${totals.checkins} ร้าน (พนักงาน ${totals.staff} คน)`,
-      `🚗 ระยะทางรวม: ${totals.distance.toFixed(1)} กม.`,
-      `⛽ ค่าน้ำมัน/ค่าเดินทาง: ${thb(totals.cost)}`,
-      `💰 ยอดขายรวม: ${thb(totals.sales)}`,
-      `⏱ เวลาปฏิบัติงาน: ${formatMinutes(totals.minutes)}`,
-      "———————————",
-      ...[...byStaff.entries()].map(
-        ([name, v]) =>
-          `👤 ${name}: ${v.count} ร้าน · ขาย ${thb(v.sales)} · เดินทาง ${thb(v.cost)}`,
-      ),
-    ];
-    return lines.join("\n");
-  };
 
-  /** เรียก backend push endpoint ตาม targetType ที่ผู้ใช้กด */
+  const reportArgs = () => ({
+    date: to,
+    dateLabel: `${from} ถึง ${to}`,
+    employeeName: employee,
+    trips: reportTrips,
+  });
+
+  /** เรียก LINE Messaging API push ตาม targetType ที่ผู้ใช้กด (Flex Message แบบละเอียด) */
   const sendReport = async (targetType: "group" | "personal") => {
     if (!accessToken) return showToast("ยังไม่ได้ตั้งค่า Channel access token ในหน้าตั้งค่า", "error");
     const targetId = targetType === "group" ? groupId : personalUserId;
@@ -183,8 +161,16 @@ export default function ReportsView({
 
     setSending(targetType);
     try {
+      const args = reportArgs();
       await notify({
-        data: { accessToken, targetType, targetId, message: summaryText() },
+        data: {
+          accessToken,
+          targetType,
+          targetId,
+          altText: `รายงานสรุปการทำงาน ${from} - ${to}`,
+          flex: buildReportFlex(args),
+          fallbackText: buildReportText(args),
+        },
       });
       showToast(
         targetType === "group" ? "ส่งรายงานเข้ากลุ่ม LINE แล้ว ✅" : "ส่งรายงานแบบส่วนตัวแล้ว ✅",

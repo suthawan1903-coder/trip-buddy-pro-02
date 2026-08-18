@@ -41,7 +41,18 @@ import {
   ShoppingCart,
 
 } from "lucide-react";
-import { sendLineMessage } from "@/lib/line.functions";
+import * as XLSX from "xlsx";
+import { sendLineMessage, notifyFlexReport } from "@/lib/line.functions";
+import {
+  buildExcelAoa,
+  buildReportFlex,
+  buildReportText,
+  computeTotals,
+  thaiDate,
+  EXCEL_COL_WIDTHS,
+  type ReportTrip,
+} from "@/lib/report-format";
+
 import { getAppSettings, updateAppSettings } from "@/lib/settings.functions";
 import { supabase } from "@/integrations/supabase/client";
 import logoUrl from "@/assets/engcorp-logo.png";
@@ -106,7 +117,10 @@ type Trip = {
   id: string;
   date: string;
   employeeName: string;
+  employeePosition?: string | null;
   place: string;
+  province?: string | null;
+  district?: string | null;
   timeIn: string;
   timeOut: string;
   dist: string | number;
@@ -115,7 +129,10 @@ type Trip = {
   durationMin?: number | null;
   jobType?: string | null;
   job?: string | null;
+  salesItems?: { name: string; qty: number; unitPrice?: number; total: number }[] | null;
+  salesTotal?: number | null;
 };
+
 
 export type AppSettings = {
   lineToken: string;
@@ -200,7 +217,10 @@ export default function TripTrackApp() {
             id: r.id,
             date: r.trip_date,
             employeeName: r.employee_name,
+            employeePosition: r.employee_position,
             place: r.place,
+            province: r.province,
+            district: r.district,
             timeIn: r.time_in || "",
             timeOut: r.time_out || "",
             dist: r.distance,
@@ -209,6 +229,9 @@ export default function TripTrackApp() {
             durationMin: r.duration_min,
             jobType: r.job_type,
             job: r.job,
+            salesItems: Array.isArray(r.sales_items) ? r.sales_items : [],
+            salesTotal: r.sales_total,
+
           })),
         );
       }
@@ -884,7 +907,10 @@ function FormView({
         id: data.id,
         date: data.trip_date,
         employeeName: data.employee_name,
+        employeePosition: data.employee_position,
         place: data.place,
+        province: data.province,
+        district: data.district,
         timeIn: data.time_in || "",
         timeOut: data.time_out || "",
         dist: data.distance,
@@ -893,7 +919,10 @@ function FormView({
         durationMin: data.duration_min,
         jobType: data.job_type,
         job: data.job,
+        salesItems: Array.isArray(data.sales_items) ? (data.sales_items as any) : [],
+        salesTotal: data.sales_total,
       });
+
       showToast("บันทึกขึ้นฐานข้อมูลเรียบร้อย ✅");
       localStorage.removeItem("tripDraft");
 
@@ -1540,58 +1569,126 @@ function DashboardView({
   showToast: (m: string, t?: string) => void;
   settings: AppSettings;
 }) {
-  const sendLine = useServerFn(sendLineMessage);
+  const sendFlex = useServerFn(notifyFlexReport);
   const [sending, setSending] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(utcDateString());
+  const [dayTrips, setDayTrips] = useState<Trip[]>([]);
+  const [loadingDay, setLoadingDay] = useState(false);
   const todayStr = utcDateString();
-  const todayTrips = trips.filter((t) => t.date === todayStr);
 
-  const sum = (list: Trip[], key: "dist" | "cost") =>
-    list.reduce((s, t) => s + (parseFloat(String(t[key])) || 0), 0);
+  /** ดึงงานของ "วันที่ที่เลือก" จากฐานข้อมูล (RLS จำกัดให้เห็นเฉพาะของตัวเอง / แอดมินเห็นทั้งหมด) */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoadingDay(true);
+      const { data, error } = await supabase
+        .from("trips")
+        .select(
+          "id, trip_date, employee_name, employee_position, place, province, district, time_in, time_out, distance, cost, status, duration_min, job_type, job, sales_items, sales_total",
+        )
+        .eq("trip_date", selectedDate)
+        .order("created_at", { ascending: true });
+      if (cancelled) return;
+      if (error) {
+        // fallback: ใช้ข้อมูลที่โหลดไว้ในหน่วยความจำ
+        setDayTrips(trips.filter((t) => t.date === selectedDate));
+      } else {
+        setDayTrips(
+          (data ?? []).map((r: any) => ({
+            id: r.id,
+            date: r.trip_date,
+            employeeName: r.employee_name,
+            employeePosition: r.employee_position,
+            place: r.place,
+            province: r.province,
+            district: r.district,
+            timeIn: r.time_in || "",
+            timeOut: r.time_out || "",
+            dist: r.distance,
+            cost: r.cost,
+            status: r.status,
+            durationMin: r.duration_min,
+            jobType: r.job_type,
+            job: r.job,
+            salesItems: Array.isArray(r.sales_items) ? r.sales_items : [],
+            salesTotal: r.sales_total,
+          })),
+        );
+      }
+      setLoadingDay(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate, trips.length]);
 
-  const todayDist = sum(todayTrips, "dist");
-  const todayCost = sum(todayTrips, "cost");
-  const todayMinutes = todayTrips.reduce((s, t) => s + (t.durationMin || 0), 0);
-  const totalDist = sum(trips, "dist");
-  const totalCost = sum(trips, "cost");
-  const litresToday =
-    settings.fuelEfficiency > 0 ? todayDist / settings.fuelEfficiency : 0;
+  const reportTrips: ReportTrip[] = useMemo(
+    () =>
+      dayTrips.map((t) => ({
+        date: t.date,
+        employeeName: t.employeeName,
+        employeePosition: t.employeePosition ?? "",
+        place: t.place,
+        province: t.province ?? "",
+        district: t.district ?? "",
+        timeIn: t.timeIn,
+        timeOut: t.timeOut,
+        dist: Number(t.dist) || 0,
+        cost: Number(t.cost) || 0,
+        durationMin: t.durationMin ?? null,
+        jobType: t.jobType ?? "",
+        job: t.job ?? "",
+        status: t.status,
+        salesItems: t.salesItems ?? [],
+        salesTotal: Number(t.salesTotal) || 0,
+      })),
+    [dayTrips],
+  );
 
-  const buildMessage = () => {
-    const todayTh = new Date().toLocaleDateString("th-TH", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-    let text = `📋 สรุปงานประจำวัน: ${todayTh}\n`;
-    text += `👤 พนักงาน: ${employeeName || "ไม่ระบุชื่อ"}\n`;
-    text += `🏪 เช็คอินทั้งหมด: ${todayTrips.length} ร้าน\n`;
-    text += `🚗 ระยะทางรวม: ${todayDist.toFixed(1)} กม.\n`;
-    text += `⛽ น้ำมันโดยประมาณ: ${litresToday.toFixed(2)} ลิตร (฿${settings.fuelPrice}/ลิตร)\n`;
-    text += `💰 ค่าเดินทางรวม: ฿${todayCost.toFixed(2)}\n`;
-    text += `⏱ เวลาปฏิบัติงานรวม: ${formatMinutes(todayMinutes)}\n\n`;
-    text += `📍 รายละเอียดงาน:\n`;
-    [...todayTrips].reverse().forEach((t, i) => {
-      text += `${i + 1}. ${t.place} (${t.timeIn || "-"} - ${t.timeOut || "-"})`;
-      if (t.jobType) text += ` [${t.jobType}]`;
-      text += ` ${Number(t.dist).toFixed(1)}กม./฿${Number(t.cost).toFixed(0)}\n`;
-      if (t.job) text += `   ↳ ${t.job}\n`;
-    });
-    return text;
+  const totals = useMemo(
+    () => computeTotals(reportTrips, settings.fuelEfficiency),
+    [reportTrips, settings.fuelEfficiency],
+  );
+
+  const sumAll = (key: "dist" | "cost") =>
+    trips.reduce((s, t) => s + (parseFloat(String(t[key])) || 0), 0);
+  const totalDist = sumAll("dist");
+  const totalCost = sumAll("cost");
+
+  const reportArgs = {
+    date: selectedDate,
+    employeeName,
+    trips: reportTrips,
+    fuelPrice: settings.fuelPrice,
+    fuelEfficiency: settings.fuelEfficiency,
   };
 
   const handleSendLineNotify = async () => {
-    if (todayTrips.length === 0) return showToast("วันนี้ยังไม่ได้ลงงานเลย", "error");
+    if (reportTrips.length === 0)
+      return showToast("วันที่เลือกยังไม่มีรายการงาน", "error");
     if (!settings.lineToken) return showToast("ยังไม่ได้ตั้งค่า LINE Access Token", "error");
+
+    const targetType = settings.lineGroupId
+      ? ("group" as const)
+      : settings.lineUserId
+        ? ("personal" as const)
+        : ("broadcast" as const);
+    const targetId = targetType === "group" ? settings.lineGroupId : settings.lineUserId;
+
     setSending(true);
     try {
-      await sendLine({
+      await sendFlex({
         data: {
           accessToken: settings.lineToken,
-          channelSecret: settings.lineSecret,
-          message: buildMessage(),
+          targetType,
+          targetId,
+          altText: `รายงานสรุปการทำงาน ${selectedDate} — ${employeeName || "พนักงาน"}`,
+          flex: buildReportFlex(reportArgs),
+          fallbackText: buildReportText(reportArgs),
         },
       });
-      showToast("ส่งแจ้งเตือนเข้า LINE สำเร็จ ✅");
+      showToast(`ส่งรายงานวันที่ ${selectedDate} เข้า LINE สำเร็จ ✅`);
     } catch (e: any) {
       showToast(`ส่งไม่สำเร็จ: ${e?.message || "unknown"}`, "error");
     } finally {
@@ -1600,8 +1697,29 @@ function DashboardView({
   };
 
   const handleShareLine = () => {
-    if (todayTrips.length === 0) return showToast("วันนี้ยังไม่ได้ลงงานเลย", "error");
-    window.open(`https://line.me/R/msg/text/?${encodeURIComponent(buildMessage())}`, "_blank");
+    if (reportTrips.length === 0) return showToast("วันที่เลือกยังไม่มีรายการงาน", "error");
+    window.open(
+      `https://line.me/R/msg/text/?${encodeURIComponent(buildReportText(reportArgs))}`,
+      "_blank",
+    );
+  };
+
+  const handleExportExcel = () => {
+    if (reportTrips.length === 0) return showToast("วันที่เลือกยังไม่มีรายการงาน", "error");
+    const aoa = buildExcelAoa({
+      title: "รายงานสรุปการทำงาน — EJH Check In",
+      rangeLabel: `${selectedDate} (${thaiDate(selectedDate)})`,
+      employeeName,
+      trips: reportTrips,
+      fuelPrice: settings.fuelPrice,
+      fuelEfficiency: settings.fuelEfficiency,
+    });
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = EXCEL_COL_WIDTHS;
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "รายงาน");
+    XLSX.writeFile(wb, `EJH-report_${selectedDate}.xlsx`);
+    showToast("ส่งออกไฟล์ Excel เรียบร้อย ✅");
   };
 
   return (
@@ -1609,26 +1727,51 @@ function DashboardView({
       <h2 className="text-xl font-bold">รายงานสรุปการทำงาน</h2>
 
       <div className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-2xl p-4 shadow-lg space-y-3">
-        <h3 className="font-bold">🗓 สรุปวันนี้ ({todayStr})</h3>
+        <div className="flex items-center gap-2">
+          <CalendarRange size={18} className="shrink-0" />
+          <input
+            type="date"
+            value={selectedDate}
+            max={todayStr}
+            onChange={(e) => setSelectedDate(e.target.value || todayStr)}
+            className="h-11 flex-1 min-w-0 rounded-xl bg-white/20 border border-white/30 px-3 text-sm font-bold text-white outline-none [color-scheme:dark]"
+          />
+          {selectedDate !== todayStr && (
+            <button
+              onClick={() => setSelectedDate(todayStr)}
+              className="h-11 px-3 rounded-xl bg-white/20 border border-white/30 text-xs font-bold"
+            >
+              วันนี้
+            </button>
+          )}
+        </div>
+        <p className="text-xs opacity-90">
+          🗓 {thaiDate(selectedDate)} {loadingDay && "· กำลังโหลด..."}
+        </p>
+
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-white/15 backdrop-blur rounded-xl p-3">
             <p className="text-xs opacity-80">เช็คอิน</p>
-            <p className="text-2xl font-bold">{todayTrips.length} ร้าน</p>
+            <p className="text-2xl font-bold">{totals.stores} ร้าน</p>
           </div>
           <div className="bg-white/15 backdrop-blur rounded-xl p-3">
             <p className="text-xs opacity-80">ระยะทางรวม</p>
-            <p className="text-2xl font-bold">{todayDist.toFixed(1)} กม.</p>
+            <p className="text-2xl font-bold">{totals.distance.toFixed(1)} กม.</p>
           </div>
           <div className="bg-white/15 backdrop-blur rounded-xl p-3">
             <p className="text-xs opacity-80">ค่าน้ำมัน/ค่าเดินทาง</p>
-            <p className="text-2xl font-bold">฿{todayCost.toFixed(0)}</p>
-            <p className="text-[10px] opacity-80">≈ {litresToday.toFixed(2)} ลิตร</p>
+            <p className="text-2xl font-bold">฿{totals.cost.toFixed(0)}</p>
+            <p className="text-[10px] opacity-80">≈ {totals.litres.toFixed(2)} ลิตร</p>
           </div>
           <div className="bg-white/15 backdrop-blur rounded-xl p-3">
             <p className="text-xs opacity-80">เวลาปฏิบัติงาน</p>
-            <p className="text-2xl font-bold">{formatMinutes(todayMinutes)}</p>
+            <p className="text-2xl font-bold">{formatMinutes(totals.minutes)}</p>
           </div>
         </div>
+        <div className="bg-white/15 backdrop-blur rounded-xl p-3 text-sm font-bold">
+          📦 Handset {totals.handsets} · SIM {totals.sims} · ยอดขาย {thb(totals.sales)}
+        </div>
+
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={handleSendLineNotify}
@@ -1638,8 +1781,14 @@ function DashboardView({
             <Send size={16} /> {sending ? "กำลังส่ง..." : "แจ้งเตือน LINE"}
           </button>
           <button
+            onClick={handleExportExcel}
+            className="bg-white text-blue-700 py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition active:scale-[0.98]"
+          >
+            <FileText size={16} /> ส่งออก Excel
+          </button>
+          <button
             onClick={handleShareLine}
-            className="bg-white/15 hover:bg-white/25 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition border border-white/20"
+            className="col-span-2 bg-white/15 hover:bg-white/25 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition border border-white/20"
           >
             <ExternalLink size={16} /> แชร์เอง
           </button>
@@ -1658,21 +1807,32 @@ function DashboardView({
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-lg">
-        <h3 className="font-bold mb-3">รายละเอียดงานล่าสุด</h3>
+        <h3 className="font-bold mb-3">รายละเอียดงานวันที่ {selectedDate}</h3>
         <div className="space-y-2">
-          {trips.length === 0 ? (
-            <p className="text-center text-gray-500 py-6 text-sm">ยังไม่มีประวัติการเดินทาง</p>
+          {dayTrips.length === 0 ? (
+            <p className="text-center text-gray-500 py-6 text-sm">ไม่มีรายการงานในวันที่เลือก</p>
           ) : (
-            trips.slice(0, 50).map((trip) => (
+            dayTrips.map((trip, idx) => (
               <div key={trip.id} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="font-medium truncate text-sm">{trip.place}</p>
+                    <p className="font-medium truncate text-sm">
+                      {idx + 1}. {trip.place}
+                    </p>
                     <p className="text-[11px] text-gray-500">
-                      {trip.date} · {trip.timeIn || "--:--"} - {trip.timeOut || "--:--"} ·{" "}
+                      {trip.employeeName} · {trip.timeIn || "--:--"} - {trip.timeOut || "--:--"} ·{" "}
                       {formatMinutes(trip.durationMin ?? null)}
+                      {trip.jobType ? ` · ${trip.jobType}` : ""}
                     </p>
                     {trip.job && <p className="text-[11px] text-gray-500 mt-0.5">{trip.job}</p>}
+                    {(trip.salesItems ?? []).length > 0 && (
+                      <p className="text-[11px] text-emerald-600 mt-0.5">
+                        ขาย:{" "}
+                        {(trip.salesItems ?? [])
+                          .map((i) => `${i.name} x${i.qty}`)
+                          .join(", ")}
+                      </p>
+                    )}
                   </div>
                   <div className="text-right shrink-0">
                     <p className="font-bold text-sm">
@@ -1691,6 +1851,7 @@ function DashboardView({
     </div>
   );
 }
+
 
 /* ================================================================== */
 /* SETTINGS                                                           */
