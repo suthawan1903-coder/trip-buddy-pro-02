@@ -206,7 +206,10 @@ export default function TripTrackApp() {
             id: r.id,
             date: r.trip_date,
             employeeName: r.employee_name,
+            employeePosition: r.employee_position,
             place: r.place,
+            province: r.province,
+            district: r.district,
             timeIn: r.time_in || "",
             timeOut: r.time_out || "",
             dist: r.distance,
@@ -215,6 +218,9 @@ export default function TripTrackApp() {
             durationMin: r.duration_min,
             jobType: r.job_type,
             job: r.job,
+            salesItems: Array.isArray(r.sales_items) ? r.sales_items : [],
+            salesTotal: r.sales_total,
+
           })),
         );
       }
