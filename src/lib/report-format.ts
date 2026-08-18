@@ -85,12 +85,13 @@ export const buildReportText = (opts: {
   trips: ReportTrip[];
   fuelPrice?: number;
   fuelEfficiency?: number;
+  dateLabel?: string;
 }) => {
-  const { date, employeeName, trips, fuelPrice = 0, fuelEfficiency = 0 } = opts;
+  const { date, employeeName, trips, fuelPrice = 0, fuelEfficiency = 0, dateLabel } = opts;
   const t = computeTotals(trips, fuelEfficiency);
   const lines = [
     "📋 รายงานสรุปการทำงาน",
-    `🗓 วันที่: ${thaiDate(date)} (${date})`,
+    `🗓 วันที่: ${dateLabel ?? `${thaiDate(date)} (${date})`}`,
     `👤 พนักงาน: ${employeeName?.trim() || "ทุกคน"}`,
     "———————————",
     `🏪 เช็คอินทั้งหมด: ${t.stores} ร้าน`,
@@ -141,8 +142,9 @@ export const buildReportFlex = (opts: {
   fuelPrice?: number;
   fuelEfficiency?: number;
   maxDetail?: number;
+  dateLabel?: string;
 }) => {
-  const { date, employeeName, trips, fuelPrice = 0, fuelEfficiency = 0, maxDetail = 20 } = opts;
+  const { date, employeeName, trips, fuelPrice = 0, fuelEfficiency = 0, maxDetail = 20, dateLabel } = opts;
   const t = computeTotals(trips, fuelEfficiency);
   const shown = trips.slice(0, maxDetail);
 
@@ -205,7 +207,7 @@ export const buildReportFlex = (opts: {
       paddingAll: "16px",
       contents: [
         { type: "text", text: "รายงานสรุปการทำงาน", color: "#FFFFFF", weight: "bold", size: "lg" },
-        { type: "text", text: thaiDate(date), color: "#DBEAFE", size: "sm", margin: "xs" },
+        { type: "text", text: dateLabel ?? thaiDate(date), color: "#DBEAFE", size: "sm", margin: "xs" },
         {
           type: "text",
           text: `พนักงาน: ${employeeName?.trim() || "ทุกคน"}`,
