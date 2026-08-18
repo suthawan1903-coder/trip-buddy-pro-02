@@ -41,7 +41,18 @@ import {
   ShoppingCart,
 
 } from "lucide-react";
-import { sendLineMessage } from "@/lib/line.functions";
+import * as XLSX from "xlsx";
+import { sendLineMessage, notifyFlexReport } from "@/lib/line.functions";
+import {
+  buildExcelAoa,
+  buildReportFlex,
+  buildReportText,
+  computeTotals,
+  thaiDate,
+  EXCEL_COL_WIDTHS,
+  type ReportTrip,
+} from "@/lib/report-format";
+
 import { getAppSettings, updateAppSettings } from "@/lib/settings.functions";
 import { supabase } from "@/integrations/supabase/client";
 import logoUrl from "@/assets/engcorp-logo.png";
