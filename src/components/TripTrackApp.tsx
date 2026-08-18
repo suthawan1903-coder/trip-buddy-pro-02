@@ -896,7 +896,10 @@ function FormView({
         id: data.id,
         date: data.trip_date,
         employeeName: data.employee_name,
+        employeePosition: data.employee_position,
         place: data.place,
+        province: data.province,
+        district: data.district,
         timeIn: data.time_in || "",
         timeOut: data.time_out || "",
         dist: data.distance,
@@ -905,7 +908,10 @@ function FormView({
         durationMin: data.duration_min,
         jobType: data.job_type,
         job: data.job,
+        salesItems: Array.isArray(data.sales_items) ? (data.sales_items as any) : [],
+        salesTotal: data.sales_total,
       });
+
       showToast("บันทึกขึ้นฐานข้อมูลเรียบร้อย ✅");
       localStorage.removeItem("tripDraft");
 
