@@ -146,7 +146,11 @@ export default function ReportsView({
     trips: reportTrips,
   });
 
-  /** เรียก LINE Messaging API push ตาม targetType ที่ผู้ใช้กด (Flex Message แบบละเอียด) */
+  /**
+   * LINE Messaging API push:
+   *  - group    → Flex แบบสั้น (สรุปเท่านั้น)
+   *  - personal → Flex แบบละเอียด (สรุป + separator + ทุกเช็คอิน)
+   */
   const sendReport = async (targetType: "group" | "personal") => {
     if (!accessToken) return showToast("ยังไม่ได้ตั้งค่า Channel access token ในหน้าตั้งค่า", "error");
     const targetId = targetType === "group" ? groupId : personalUserId;
@@ -168,8 +172,8 @@ export default function ReportsView({
           targetType,
           targetId,
           altText: `รายงานสรุปการทำงาน ${from} - ${to}`,
-          flex: buildReportFlex(args),
-          fallbackText: buildReportText(args),
+          flex: targetType === "group" ? buildSummaryFlex(args) : buildReportFlex(args),
+          ...(targetType === "personal" ? { fallbackText: buildReportText(args) } : {}),
         },
       });
       showToast(
