@@ -46,6 +46,7 @@ import { sendLineMessage, notifyFlexReport } from "@/lib/line.functions";
 import {
   buildExcelAoa,
   buildReportFlex,
+  buildSummaryFlex,
   buildReportText,
   computeTotals,
   thaiDate,
