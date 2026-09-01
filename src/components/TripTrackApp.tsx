@@ -46,6 +46,7 @@ import { sendLineMessage, notifyFlexReport } from "@/lib/line.functions";
 import {
   buildExcelAoa,
   buildReportFlex,
+  buildSummaryFlex,
   buildReportText,
   computeTotals,
   thaiDate,
@@ -58,7 +59,7 @@ import { supabase } from "@/integrations/supabase/client";
 import logoUrl from "@/assets/engcorp-logo.png";
 import InstallPrompt from "@/components/InstallPrompt";
 import { calculateFuelCost, tryCalculateFuelCost } from "@/lib/fuel-cost";
-import { compressImageFiles } from "@/lib/image-capture";
+import { compressImageFiles, getWatermarkPosition } from "@/lib/image-capture";
 import {
   cleanSalesItems,
   lineTotal,
@@ -804,7 +805,14 @@ function FormView({
     if (!files || files.length === 0) return;
     setProcessingPhoto(true);
     try {
-      const captured = await compressImageFiles(files);
+      // ดึงพิกัดสด (ถ้าไม่ได้ ใช้ตำแหน่ง GPS ล่าสุดที่จับไว้)
+      const live = await getWatermarkPosition();
+      const coords = live ?? startPoint ?? null;
+      if (!live && !startPoint) showToast("ไม่พบพิกัด GPS — ประทับเฉพาะเวลา", "error");
+      const captured = await compressImageFiles(files, 1280, 0.72, {
+        coords,
+        note: formData.place ? `📍 ${formData.place}` : undefined,
+      });
       if (captured.length === 0) showToast("ไม่พบไฟล์รูปที่ใช้ได้", "error");
       else
         setFormData((prev) => ({
@@ -1684,8 +1692,12 @@ function DashboardView({
           targetType,
           targetId,
           altText: `รายงานสรุปการทำงาน ${selectedDate} — ${employeeName || "พนักงาน"}`,
-          flex: buildReportFlex(reportArgs),
-          fallbackText: buildReportText(reportArgs),
+          // กลุ่ม = สรุปสั้น, ส่วนตัว/broadcast = ละเอียดทุกเช็คอิน
+          flex:
+            targetType === "group"
+              ? buildSummaryFlex(reportArgs)
+              : buildReportFlex(reportArgs),
+          ...(targetType === "group" ? {} : { fallbackText: buildReportText(reportArgs) }),
         },
       });
       showToast(`ส่งรายงานวันที่ ${selectedDate} เข้า LINE สำเร็จ ✅`);
@@ -1880,8 +1892,10 @@ function SettingsView({
       const data = await fetchPttFuelPrices();
       setPtt({ date: data.date, prices: data.prices });
       showToast(`ราคาน้ำมัน ปตท. วันที่ ${data.date} ✅`);
-    } catch (e: any) {
-      showToast(e?.message || "ดึงราคาน้ำมันไม่สำเร็จ", "error");
+    } catch {
+      // Fallback: ไม่ล้มทั้งแอป — ให้ผู้ใช้กรอกราคาเอง
+      setPtt(null);
+      showToast("ดึงราคาน้ำมันไม่สำเร็จ กรุณากรอกราคาเอง", "error");
     } finally {
       setPttLoading(false);
     }
