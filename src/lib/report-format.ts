@@ -134,7 +134,63 @@ const row = (label: string, value: string) => ({
   ],
 });
 
-/** LINE Flex Message (bubble) — Header / Summary / Detailed list. */
+const flexHeader = (dateLabel: string, employeeName?: string) => ({
+  type: "box",
+  layout: "vertical",
+  backgroundColor: "#2563EB",
+  paddingAll: "16px",
+  contents: [
+    { type: "text", text: "รายงานสรุปการทำงาน", color: "#FFFFFF", weight: "bold", size: "lg" },
+    { type: "text", text: dateLabel, color: "#DBEAFE", size: "sm", margin: "xs" },
+    {
+      type: "text",
+      text: `พนักงาน: ${employeeName?.trim() || "ทุกคน"}`,
+      color: "#FFFFFF",
+      size: "sm",
+      margin: "sm",
+      wrap: true,
+    },
+  ],
+});
+
+const summaryRows = (t: ReportTotals, fuelPrice: number) => [
+  row("🏪 เช็คอิน", `${t.stores} ร้าน`),
+  row("🚗 ระยะทางรวม", `${t.distance.toFixed(1)} กม.`),
+  row("⛽ ค่าน้ำมัน/ค่าเดินทาง", `${thb(t.cost)}${fuelPrice ? ` (฿${fuelPrice}/ล.)` : ""}`),
+  row("⏱ เวลาปฏิบัติงาน", formatMinutes(t.minutes)),
+  row("📦 สินค้าที่ขาย", `Handset ${t.handsets} · SIM ${t.sims}`),
+  row("💰 ยอดขายรวม", thb(t.sales)),
+];
+
+/** Group Chat template — สรุปสั้น ไม่มีรายละเอียดรายร้าน */
+export const buildSummaryFlex = (opts: {
+  date: string;
+  employeeName?: string;
+  trips: ReportTrip[];
+  fuelPrice?: number;
+  fuelEfficiency?: number;
+  dateLabel?: string;
+}) => {
+  const { date, employeeName, trips, fuelPrice = 0, fuelEfficiency = 0, dateLabel } = opts;
+  const t = computeTotals(trips, fuelEfficiency);
+  return {
+    type: "bubble" as const,
+    size: "mega",
+    header: flexHeader(dateLabel ?? thaiDate(date), employeeName),
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      paddingAll: "16px",
+      contents: [
+        { type: "text", text: "สรุปภาพรวม", weight: "bold", size: "sm", color: "#2563EB" },
+        ...summaryRows(t, fuelPrice),
+      ],
+    },
+  };
+};
+
+/** Personal Chat template — Header / Summary / separator / รายละเอียดทุกเช็คอิน */
 export const buildReportFlex = (opts: {
   date: string;
   employeeName?: string;
