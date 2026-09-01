@@ -58,7 +58,7 @@ import { supabase } from "@/integrations/supabase/client";
 import logoUrl from "@/assets/engcorp-logo.png";
 import InstallPrompt from "@/components/InstallPrompt";
 import { calculateFuelCost, tryCalculateFuelCost } from "@/lib/fuel-cost";
-import { compressImageFiles } from "@/lib/image-capture";
+import { compressImageFiles, getWatermarkPosition } from "@/lib/image-capture";
 import {
   cleanSalesItems,
   lineTotal,
