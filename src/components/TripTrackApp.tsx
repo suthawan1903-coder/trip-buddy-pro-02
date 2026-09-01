@@ -1691,8 +1691,12 @@ function DashboardView({
           targetType,
           targetId,
           altText: `รายงานสรุปการทำงาน ${selectedDate} — ${employeeName || "พนักงาน"}`,
-          flex: buildReportFlex(reportArgs),
-          fallbackText: buildReportText(reportArgs),
+          // กลุ่ม = สรุปสั้น, ส่วนตัว/broadcast = ละเอียดทุกเช็คอิน
+          flex:
+            targetType === "group"
+              ? buildSummaryFlex(reportArgs)
+              : buildReportFlex(reportArgs),
+          ...(targetType === "group" ? {} : { fallbackText: buildReportText(reportArgs) }),
         },
       });
       showToast(`ส่งรายงานวันที่ ${selectedDate} เข้า LINE สำเร็จ ✅`);
