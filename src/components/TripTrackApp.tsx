@@ -1892,8 +1892,10 @@ function SettingsView({
       const data = await fetchPttFuelPrices();
       setPtt({ date: data.date, prices: data.prices });
       showToast(`ราคาน้ำมัน ปตท. วันที่ ${data.date} ✅`);
-    } catch (e: any) {
-      showToast(e?.message || "ดึงราคาน้ำมันไม่สำเร็จ", "error");
+    } catch {
+      // Fallback: ไม่ล้มทั้งแอป — ให้ผู้ใช้กรอกราคาเอง
+      setPtt(null);
+      showToast("ดึงราคาน้ำมันไม่สำเร็จ กรุณากรอกราคาเอง", "error");
     } finally {
       setPttLoading(false);
     }
