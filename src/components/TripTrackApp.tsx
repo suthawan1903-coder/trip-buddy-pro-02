@@ -804,7 +804,14 @@ function FormView({
     if (!files || files.length === 0) return;
     setProcessingPhoto(true);
     try {
-      const captured = await compressImageFiles(files);
+      // ดึงพิกัดสด (ถ้าไม่ได้ ใช้ตำแหน่ง GPS ล่าสุดที่จับไว้)
+      const live = await getWatermarkPosition();
+      const coords = live ?? startPoint ?? null;
+      if (!live && !startPoint) showToast("ไม่พบพิกัด GPS — ประทับเฉพาะเวลา", "error");
+      const captured = await compressImageFiles(files, 1280, 0.72, {
+        coords,
+        note: formData.place ? `📍 ${formData.place}` : undefined,
+      });
       if (captured.length === 0) showToast("ไม่พบไฟล์รูปที่ใช้ได้", "error");
       else
         setFormData((prev) => ({
