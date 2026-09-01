@@ -8,6 +8,7 @@ import {
   buildExcelAoa,
   buildReportFlex,
   buildReportText,
+  buildSummaryFlex,
   EXCEL_COL_WIDTHS,
   type ReportTrip,
 } from "@/lib/report-format";
