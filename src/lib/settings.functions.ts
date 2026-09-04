@@ -6,7 +6,7 @@ const settingsSchema = z.object({
   fuelPrice: z.number().min(0).max(1000),
   fuelEfficiency: z.number().min(0.1).max(100),
   ratePerKm: z.number().min(0).max(1000),
-  checkinRadiusKm: z.number().min(0.1).max(200),
+  checkinRadiusKm: z.number().min(0.02).max(200),
   lineToken: z.string().max(4000).optional(),
   lineSecret: z.string().max(500).optional(),
   lineNotifyToken: z.string().max(4000).optional(),
@@ -30,7 +30,7 @@ export const getAppSettings = createServerFn({ method: "GET" })
       fuelPrice: Number(data?.fuel_price ?? 38),
       fuelEfficiency: Number(data?.fuel_efficiency ?? 12),
       ratePerKm: Number(data?.rate_per_km ?? 0),
-      checkinRadiusKm: Number(data?.checkin_radius_km ?? 5),
+      checkinRadiusKm: Number(data?.checkin_radius_km ?? 0.2),
       lineToken: data?.line_token ?? "",
       lineSecret: data?.line_secret ?? "",
       lineNotifyToken: data?.line_notify_token ?? "",
@@ -55,7 +55,8 @@ export const updateAppSettings = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin
       .from("app_settings")
-      .update({
+      .upsert({
+        id: true,
         fuel_price: data.fuelPrice,
         fuel_efficiency: data.fuelEfficiency,
         rate_per_km: data.ratePerKm,
@@ -66,9 +67,7 @@ export const updateAppSettings = createServerFn({ method: "POST" })
         line_group_id: data.lineGroupId ?? "",
         line_user_id: data.lineUserId ?? "",
 
-      })
-
-      .eq("id", true);
+      });
     if (error) throw new Error(error.message);
     return { ok: true };
   });

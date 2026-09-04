@@ -156,7 +156,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   fuelPrice: 38,
   fuelEfficiency: 12,
   ratePerKm: 0,
-  checkinRadiusKm: 5,
+  checkinRadiusKm: 0.2,
 };
 
 
@@ -269,6 +269,9 @@ export default function TripTrackApp() {
           checkinRadiusKm: s.checkinRadiusKm,
           lineToken: s.lineToken,
           lineSecret: s.lineSecret,
+          lineNotifyToken: s.lineNotifyToken,
+          lineGroupId: s.lineGroupId,
+          lineUserId: s.lineUserId,
         },
       });
       showToast("บันทึกการตั้งค่าส่วนกลางเรียบร้อย ✅");
@@ -464,6 +467,9 @@ function FormView({
   const startMarkerRef = useRef<any>(null);
   const destMarkerRef = useRef<any>(null);
   const radiusLayerRef = useRef<any>(null);
+  const photoMapRef = useRef<HTMLDivElement | null>(null);
+  const [photoMapInstance, setPhotoMapInstance] = useState<any>(null);
+  const photoMarkerRef = useRef<any>(null);
 
   const [formData, setFormData] = useState({
     date: utcDateString(),
@@ -575,6 +581,47 @@ function FormView({
     };
   }, [mapInstance, trackingMode]);
 
+  /* ------------- mini map in the photo (check-in evidence) section --------- */
+  useEffect(() => {
+    if (!photoMapRef.current || photoMapInstance) return;
+    let cancelled = false;
+    const init = async () => {
+      let attempts = 0;
+      while (!window.L && attempts < 40) {
+        await new Promise((r) => setTimeout(r, 300));
+        attempts++;
+      }
+      if (cancelled || !window.L || !photoMapRef.current) return;
+      const map = window.L
+        .map(photoMapRef.current, { zoomControl: false, attributionControl: false })
+        .setView(startPoint ?? [13.7563, 100.5018], startPoint ? 16 : 11);
+      window.L
+        .tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: "© OpenStreetMap",
+        })
+        .addTo(map);
+      setPhotoMapInstance(map);
+    };
+    void init();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoMapInstance]);
+
+  /* keep the photo mini map pinned to the live position */
+  useEffect(() => {
+    if (!photoMapInstance || !window.L || !startPoint) return;
+    if (photoMarkerRef.current) photoMapInstance.removeLayer(photoMarkerRef.current);
+    photoMarkerRef.current = window.L
+      .marker(startPoint)
+      .addTo(photoMapInstance)
+      .bindPopup("ตำแหน่งถ่ายรูป");
+    photoMapInstance.setView(startPoint, 16);
+    setTimeout(() => photoMapInstance.invalidateSize(), 150);
+  }, [photoMapInstance, startPoint]);
+
+
   /* --------------------- auto GPS (Android/iOS friendly) ------------------ */
   useEffect(() => {
     let stopped = false;
@@ -624,7 +671,9 @@ function FormView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapInstance, startPoint, settings.checkinRadiusKm]);
 
-  /* ----------- auto list of stores within the check-in radius ------------- */
+  /* ----------- auto list of nearby stores (wider scan than check-in) ------- */
+  const checkinRadiusM = Math.round(settings.checkinRadiusKm * 1000);
+  const scanRadiusKm = Math.max(settings.checkinRadiusKm, 5);
   useEffect(() => {
     if (!startPoint || customers.length === 0) return;
     let cancelled = false;
@@ -652,7 +701,7 @@ function FormView({
         const point = await geocodeDistrict(dist, prov);
         if (!point) continue;
         const km = haversineKm(startPoint, point);
-        if (km <= settings.checkinRadiusKm) {
+        if (km <= scanRadiusKm) {
           customers
             .filter((c) => c.province === prov && c.district === dist)
             .forEach((c) => found.push({ c, km: Math.round(km * 100) / 100 }));
@@ -669,7 +718,7 @@ function FormView({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startPoint === null, customers.length, settings.checkinRadiusKm]);
+  }, [startPoint === null, customers.length, scanRadiusKm]);
 
   /* ------------------------------- routing -------------------------------- */
   const drawRoute = async (dest: LatLng, from: LatLng | null = startPoint) => {
@@ -857,7 +906,23 @@ function FormView({
     saveDraftToLocal(next);
   };
 
+  /** ระยะห่างจากตำแหน่งปัจจุบันถึงร้านที่เลือก (เมตร) */
+  const distanceToStoreM =
+    startPoint && destPoint ? Math.round(haversineKm(startPoint, destPoint) * 1000) : null;
+  const withinCheckinRadius =
+    distanceToStoreM === null ? false : distanceToStoreM <= checkinRadiusM;
+
   const handleTimeStamp = (field: "timeIn" | "timeOut") => {
+    if (field === "timeIn" && trackingMode === "gps") {
+      if (!startPoint) return showToast("ยังไม่ได้รับตำแหน่ง GPS — กดรีเฟรช GPS ก่อน", "error");
+      if (!destPoint)
+        return showToast("เลือกร้านค้าที่จะเช็คอินก่อน (ต้องมีพิกัดร้าน)", "error");
+      if (!withinCheckinRadius)
+        return showToast(
+          `เช็คอินได้เมื่ออยู่ในรัศมี ${checkinRadiusM} เมตรเท่านั้น (ปัจจุบันห่าง ${distanceToStoreM} ม.)`,
+          "error",
+        );
+    }
     const timeString = new Date().toLocaleTimeString("th-TH", {
       hour: "2-digit",
       minute: "2-digit",
@@ -1011,7 +1076,7 @@ function FormView({
             <div className="flex items-center justify-between">
               <h2 className="font-bold flex items-center gap-2 text-sm">
                 <Store size={18} className="text-blue-600" />
-                ร้านที่ต้องเช็คอินในรัศมี {settings.checkinRadiusKm} กม.
+                ร้านใกล้คุณ (เช็คอินได้ในรัศมี {checkinRadiusM} ม.)
               </h2>
               <button
                 onClick={refreshGps}
@@ -1063,7 +1128,7 @@ function FormView({
               ))}
               {!scanningNearby && nearby.length === 0 && (
                 <p className="text-[11px] text-slate-400 py-2">
-                  ยังไม่พบร้านในรัศมี {settings.checkinRadiusKm} กม. — เลือกร้านจากช่องค้นหาด้านล่างได้เลย
+                  ยังไม่พบร้านในรัศมี {scanRadiusKm} กม. — เลือกร้านจากช่องค้นหาด้านล่างได้เลย
                 </p>
               )}
             </div>
@@ -1262,6 +1327,15 @@ function FormView({
                 <Clock size={16} /> กดเช็คอิน
               </button>
               <p className="text-center text-sm font-mono mt-1">{formData.timeIn || "--:--"}</p>
+              {trackingMode === "gps" && distanceToStoreM !== null && (
+                <p
+                  className={`text-center text-[11px] mt-0.5 font-semibold ${
+                    withinCheckinRadius ? "text-emerald-600" : "text-red-500"
+                  }`}
+                >
+                  ห่างร้าน {distanceToStoreM} ม. (จำกัด {checkinRadiusM} ม.)
+                </p>
+              )}
             </div>
             <div>
               <label className="text-sm font-medium block mb-1">เวลาออก (Check-out)</label>
@@ -1453,6 +1527,17 @@ function FormView({
             <label className="text-sm font-medium block mb-1">
               หลักฐาน / บิลน้ำมัน / รูปถ่ายหน้างาน
             </label>
+
+            {/* แผนที่ตำแหน่งปัจจุบันสำหรับหน้าถ่ายรูป */}
+            <div className="mb-2 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 relative">
+              <div ref={photoMapRef} className="w-full h-44 bg-slate-200 dark:bg-slate-700" />
+              <div className="absolute bottom-0 left-0 right-0 bg-black/55 text-white text-[11px] px-2 py-1 font-mono">
+                {startPoint
+                  ? `📍 ${startPoint[0].toFixed(6)}, ${startPoint[1].toFixed(6)}`
+                  : "กำลังรอตำแหน่ง GPS..."}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-2">
               <label className="border-2 border-dashed dark:border-gray-600 rounded-xl p-4 text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition active:scale-[0.98]">
                 {/* Native camera — works on legacy iOS/Android, no WebRTC */}
@@ -2078,10 +2163,10 @@ function SettingsView({
             onChange={(v) => setForm({ ...form, ratePerKm: v })}
           />
           <NumberField
-            label="รัศมีเช็คอิน (กม.)"
-            value={form.checkinRadiusKm}
+            label="รัศมีเช็คอิน (เมตร)"
+            value={Math.round(form.checkinRadiusKm * 1000)}
             disabled={disabled}
-            onChange={(v) => setForm({ ...form, checkinRadiusKm: v })}
+            onChange={(v) => setForm({ ...form, checkinRadiusKm: (v || 0) / 1000 })}
           />
         </div>
 
