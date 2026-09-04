@@ -269,6 +269,9 @@ export default function TripTrackApp() {
           checkinRadiusKm: s.checkinRadiusKm,
           lineToken: s.lineToken,
           lineSecret: s.lineSecret,
+          lineNotifyToken: s.lineNotifyToken,
+          lineGroupId: s.lineGroupId,
+          lineUserId: s.lineUserId,
         },
       });
       showToast("บันทึกการตั้งค่าส่วนกลางเรียบร้อย ✅");
