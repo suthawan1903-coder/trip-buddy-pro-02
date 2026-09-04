@@ -627,7 +627,9 @@ function FormView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapInstance, startPoint, settings.checkinRadiusKm]);
 
-  /* ----------- auto list of stores within the check-in radius ------------- */
+  /* ----------- auto list of nearby stores (wider scan than check-in) ------- */
+  const checkinRadiusM = Math.round(settings.checkinRadiusKm * 1000);
+  const scanRadiusKm = Math.max(settings.checkinRadiusKm, 5);
   useEffect(() => {
     if (!startPoint || customers.length === 0) return;
     let cancelled = false;
