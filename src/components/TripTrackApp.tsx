@@ -578,6 +578,47 @@ function FormView({
     };
   }, [mapInstance, trackingMode]);
 
+  /* ------------- mini map in the photo (check-in evidence) section --------- */
+  useEffect(() => {
+    if (!photoMapRef.current || photoMapInstance) return;
+    let cancelled = false;
+    const init = async () => {
+      let attempts = 0;
+      while (!window.L && attempts < 40) {
+        await new Promise((r) => setTimeout(r, 300));
+        attempts++;
+      }
+      if (cancelled || !window.L || !photoMapRef.current) return;
+      const map = window.L
+        .map(photoMapRef.current, { zoomControl: false, attributionControl: false })
+        .setView(startPoint ?? [13.7563, 100.5018], startPoint ? 16 : 11);
+      window.L
+        .tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: "© OpenStreetMap",
+        })
+        .addTo(map);
+      setPhotoMapInstance(map);
+    };
+    void init();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoMapInstance]);
+
+  /* keep the photo mini map pinned to the live position */
+  useEffect(() => {
+    if (!photoMapInstance || !window.L || !startPoint) return;
+    if (photoMarkerRef.current) photoMapInstance.removeLayer(photoMarkerRef.current);
+    photoMarkerRef.current = window.L
+      .marker(startPoint)
+      .addTo(photoMapInstance)
+      .bindPopup("ตำแหน่งถ่ายรูป");
+    photoMapInstance.setView(startPoint, 16);
+    setTimeout(() => photoMapInstance.invalidateSize(), 150);
+  }, [photoMapInstance, startPoint]);
+
+
   /* --------------------- auto GPS (Android/iOS friendly) ------------------ */
   useEffect(() => {
     let stopped = false;
