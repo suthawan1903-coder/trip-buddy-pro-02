@@ -6,7 +6,7 @@ const settingsSchema = z.object({
   fuelPrice: z.number().min(0).max(1000),
   fuelEfficiency: z.number().min(0.1).max(100),
   ratePerKm: z.number().min(0).max(1000),
-  checkinRadiusKm: z.number().min(0.1).max(200),
+  checkinRadiusKm: z.number().min(0.02).max(200),
   lineToken: z.string().max(4000).optional(),
   lineSecret: z.string().max(500).optional(),
   lineNotifyToken: z.string().max(4000).optional(),
