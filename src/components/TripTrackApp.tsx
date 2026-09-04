@@ -674,7 +674,7 @@ function FormView({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startPoint === null, customers.length, settings.checkinRadiusKm]);
+  }, [startPoint === null, customers.length, scanRadiusKm]);
 
   /* ------------------------------- routing -------------------------------- */
   const drawRoute = async (dest: LatLng, from: LatLng | null = startPoint) => {
