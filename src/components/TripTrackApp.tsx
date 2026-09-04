@@ -467,6 +467,9 @@ function FormView({
   const startMarkerRef = useRef<any>(null);
   const destMarkerRef = useRef<any>(null);
   const radiusLayerRef = useRef<any>(null);
+  const photoMapRef = useRef<HTMLDivElement | null>(null);
+  const [photoMapInstance, setPhotoMapInstance] = useState<any>(null);
+  const photoMarkerRef = useRef<any>(null);
 
   const [formData, setFormData] = useState({
     date: utcDateString(),
