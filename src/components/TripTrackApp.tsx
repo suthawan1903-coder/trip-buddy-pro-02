@@ -657,7 +657,7 @@ function FormView({
         const point = await geocodeDistrict(dist, prov);
         if (!point) continue;
         const km = haversineKm(startPoint, point);
-        if (km <= settings.checkinRadiusKm) {
+        if (km <= scanRadiusKm) {
           customers
             .filter((c) => c.province === prov && c.district === dist)
             .forEach((c) => found.push({ c, km: Math.round(km * 100) / 100 }));
