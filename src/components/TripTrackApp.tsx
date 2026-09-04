@@ -1032,7 +1032,7 @@ function FormView({
             <div className="flex items-center justify-between">
               <h2 className="font-bold flex items-center gap-2 text-sm">
                 <Store size={18} className="text-blue-600" />
-                ร้านที่ต้องเช็คอินในรัศมี {settings.checkinRadiusKm} กม.
+                ร้านใกล้คุณ (เช็คอินได้ในรัศมี {checkinRadiusM} ม.)
               </h2>
               <button
                 onClick={refreshGps}
