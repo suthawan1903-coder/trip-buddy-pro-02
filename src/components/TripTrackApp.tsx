@@ -1084,7 +1084,7 @@ function FormView({
               ))}
               {!scanningNearby && nearby.length === 0 && (
                 <p className="text-[11px] text-slate-400 py-2">
-                  ยังไม่พบร้านในรัศมี {settings.checkinRadiusKm} กม. — เลือกร้านจากช่องค้นหาด้านล่างได้เลย
+                  ยังไม่พบร้านในรัศมี {scanRadiusKm} กม. — เลือกร้านจากช่องค้นหาด้านล่างได้เลย
                 </p>
               )}
             </div>
