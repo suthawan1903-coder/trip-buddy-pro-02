@@ -156,7 +156,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   fuelPrice: 38,
   fuelEfficiency: 12,
   ratePerKm: 0,
-  checkinRadiusKm: 5,
+  checkinRadiusKm: 0.2,
 };
 
 
