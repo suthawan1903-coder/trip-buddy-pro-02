@@ -55,7 +55,8 @@ export const updateAppSettings = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin
       .from("app_settings")
-      .update({
+      .upsert({
+        id: true,
         fuel_price: data.fuelPrice,
         fuel_efficiency: data.fuelEfficiency,
         rate_per_km: data.ratePerKm,
