@@ -30,7 +30,7 @@ export const getAppSettings = createServerFn({ method: "GET" })
       fuelPrice: Number(data?.fuel_price ?? 38),
       fuelEfficiency: Number(data?.fuel_efficiency ?? 12),
       ratePerKm: Number(data?.rate_per_km ?? 0),
-      checkinRadiusKm: Number(data?.checkin_radius_km ?? 5),
+      checkinRadiusKm: Number(data?.checkin_radius_km ?? 0.2),
       lineToken: data?.line_token ?? "",
       lineSecret: data?.line_secret ?? "",
       lineNotifyToken: data?.line_notify_token ?? "",
