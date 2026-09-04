@@ -862,7 +862,23 @@ function FormView({
     saveDraftToLocal(next);
   };
 
+  /** ระยะห่างจากตำแหน่งปัจจุบันถึงร้านที่เลือก (เมตร) */
+  const distanceToStoreM =
+    startPoint && destPoint ? Math.round(haversineKm(startPoint, destPoint) * 1000) : null;
+  const withinCheckinRadius =
+    distanceToStoreM === null ? false : distanceToStoreM <= checkinRadiusM;
+
   const handleTimeStamp = (field: "timeIn" | "timeOut") => {
+    if (field === "timeIn" && trackingMode === "gps") {
+      if (!startPoint) return showToast("ยังไม่ได้รับตำแหน่ง GPS — กดรีเฟรช GPS ก่อน", "error");
+      if (!destPoint)
+        return showToast("เลือกร้านค้าที่จะเช็คอินก่อน (ต้องมีพิกัดร้าน)", "error");
+      if (!withinCheckinRadius)
+        return showToast(
+          `เช็คอินได้เมื่ออยู่ในรัศมี ${checkinRadiusM} เมตรเท่านั้น (ปัจจุบันห่าง ${distanceToStoreM} ม.)`,
+          "error",
+        );
+    }
     const timeString = new Date().toLocaleTimeString("th-TH", {
       hour: "2-digit",
       minute: "2-digit",
