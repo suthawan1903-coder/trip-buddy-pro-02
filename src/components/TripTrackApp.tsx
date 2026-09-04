@@ -1527,6 +1527,17 @@ function FormView({
             <label className="text-sm font-medium block mb-1">
               หลักฐาน / บิลน้ำมัน / รูปถ่ายหน้างาน
             </label>
+
+            {/* แผนที่ตำแหน่งปัจจุบันสำหรับหน้าถ่ายรูป */}
+            <div className="mb-2 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 relative">
+              <div ref={photoMapRef} className="w-full h-44 bg-slate-200 dark:bg-slate-700" />
+              <div className="absolute bottom-0 left-0 right-0 bg-black/55 text-white text-[11px] px-2 py-1 font-mono">
+                {startPoint
+                  ? `📍 ${startPoint[0].toFixed(6)}, ${startPoint[1].toFixed(6)}`
+                  : "กำลังรอตำแหน่ง GPS..."}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-2">
               <label className="border-2 border-dashed dark:border-gray-600 rounded-xl p-4 text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition active:scale-[0.98]">
                 {/* Native camera — works on legacy iOS/Android, no WebRTC */}
