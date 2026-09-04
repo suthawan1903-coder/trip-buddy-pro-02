@@ -1283,6 +1283,15 @@ function FormView({
                 <Clock size={16} /> กดเช็คอิน
               </button>
               <p className="text-center text-sm font-mono mt-1">{formData.timeIn || "--:--"}</p>
+              {trackingMode === "gps" && distanceToStoreM !== null && (
+                <p
+                  className={`text-center text-[11px] mt-0.5 font-semibold ${
+                    withinCheckinRadius ? "text-emerald-600" : "text-red-500"
+                  }`}
+                >
+                  ห่างร้าน {distanceToStoreM} ม. (จำกัด {checkinRadiusM} ม.)
+                </p>
+              )}
             </div>
             <div>
               <label className="text-sm font-medium block mb-1">เวลาออก (Check-out)</label>
