@@ -2163,10 +2163,10 @@ function SettingsView({
             onChange={(v) => setForm({ ...form, ratePerKm: v })}
           />
           <NumberField
-            label="รัศมีเช็คอิน (กม.)"
-            value={form.checkinRadiusKm}
+            label="รัศมีเช็คอิน (เมตร)"
+            value={Math.round(form.checkinRadiusKm * 1000)}
             disabled={disabled}
-            onChange={(v) => setForm({ ...form, checkinRadiusKm: v })}
+            onChange={(v) => setForm({ ...form, checkinRadiusKm: (v || 0) / 1000 })}
           />
         </div>
 
