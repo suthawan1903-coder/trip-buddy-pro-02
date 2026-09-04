@@ -67,9 +67,7 @@ export const updateAppSettings = createServerFn({ method: "POST" })
         line_group_id: data.lineGroupId ?? "",
         line_user_id: data.lineUserId ?? "",
 
-      })
-
-      .eq("id", true);
+      });
     if (error) throw new Error(error.message);
     return { ok: true };
   });
