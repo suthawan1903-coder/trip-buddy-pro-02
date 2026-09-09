@@ -131,6 +131,30 @@ export function geocodeProvince(province: string) {
   return geocodeCached(`p|${province}`, `จังหวัด${province}, ประเทศไทย`);
 }
 
+/**
+ * Store-level geocode (precise). Falls back to the district centroid so the
+ * caller always gets a usable point, but reports which precision it used —
+ * a district centroid can be many km from the actual shop, so a 200 m
+ * check-in radius must never be enforced against it.
+ */
+export async function geocodeStore(
+  name: string,
+  district: string,
+  province: string,
+): Promise<{ point: LatLng; precise: boolean } | null> {
+  const cleanName = name.trim();
+  if (cleanName) {
+    const key = `s|${province}|${district}|${cleanName}`;
+    const q = [cleanName, district ? `อำเภอ${district}` : "", province ? `จังหวัด${province}` : "", "ประเทศไทย"]
+      .filter(Boolean)
+      .join(", ");
+    const point = await geocodeCached(key, q);
+    if (point) return { point, precise: true };
+  }
+  const fallback = await geocodeDistrict(district, province);
+  return fallback ? { point: fallback, precise: false } : null;
+}
+
 /** Read a cached point without triggering a network call. */
 export function peekGeocode(key: string): LatLng | null | undefined {
   const cache = readCache();
@@ -144,26 +168,34 @@ export function peekGeocode(key: string): LatLng | null | undefined {
 export type GeoOptions = { highAccuracy?: boolean; timeoutMs?: number };
 
 /**
- * getCurrentPosition with a low-accuracy retry — old Android WebViews and
- * iOS Safari often time out when enableHighAccuracy is forced.
+ * getCurrentPosition, always with enableHighAccuracy: true and a fresh fix
+ * (maximumAge: 0) so a stale cell-tower position can never be reused. A
+ * second high-accuracy attempt with a longer timeout runs before the
+ * low-accuracy last resort for old Android WebViews.
  */
 export function getPosition(opts: GeoOptions = {}): Promise<GeolocationPosition> {
-  const { highAccuracy = true, timeoutMs = 15000 } = opts;
+  const { timeoutMs = 15000 } = opts;
   return new Promise((resolve, reject) => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       reject(new Error("อุปกรณ์/เบราว์เซอร์นี้ไม่รองรับ GPS"));
       return;
     }
-    const fallback = () =>
+    const lastResort = () =>
       navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: false,
+        enableHighAccuracy: true,
         timeout: timeoutMs,
-        maximumAge: 60000,
+        maximumAge: 30000,
       });
-    navigator.geolocation.getCurrentPosition(resolve, () => fallback(), {
-      enableHighAccuracy: highAccuracy,
+    const retryHighAccuracy = () =>
+      navigator.geolocation.getCurrentPosition(resolve, () => lastResort(), {
+        enableHighAccuracy: true,
+        timeout: timeoutMs * 2,
+        maximumAge: 0,
+      });
+    navigator.geolocation.getCurrentPosition(resolve, () => retryHighAccuracy(), {
+      enableHighAccuracy: true,
       timeout: timeoutMs,
-      maximumAge: 30000,
+      maximumAge: 0,
     });
   });
 }
@@ -176,7 +208,7 @@ export function watchPosition(
   const id = navigator.geolocation.watchPosition(
     (pos) => onUpdate([pos.coords.latitude, pos.coords.longitude], pos.coords.accuracy),
     (err) => onError?.(err),
-    { enableHighAccuracy: true, timeout: 20000, maximumAge: 15000 },
+    { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
   );
   return () => navigator.geolocation.clearWatch(id);
 }
