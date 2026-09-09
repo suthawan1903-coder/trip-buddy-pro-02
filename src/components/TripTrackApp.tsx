@@ -966,18 +966,22 @@ function FormView({
     saveDraftToLocal(next);
   };
 
-  /** ระยะห่างจากตำแหน่งปัจจุบันถึงร้านที่เลือก (เมตร) */
+  /** ระยะห่างจากตำแหน่งปัจจุบันถึงร้านที่เลือก (เมตร) — Haversine */
   const distanceToStoreM =
     startPoint && destPoint ? Math.round(haversineKm(startPoint, destPoint) * 1000) : null;
+  /** เผื่อความคลาดเคลื่อน GPS (ไม่เกิน 100 ม.) เพื่อไม่ให้คนที่อยู่หน้าร้านจริงถูกบล็อก */
+  const gpsToleranceM = Math.min(Math.round(accuracy ?? 0), 100);
+  const allowedRadiusM = checkinRadiusM + gpsToleranceM;
   const withinCheckinRadius =
-    distanceToStoreM === null ? false : distanceToStoreM <= checkinRadiusM;
+    distanceToStoreM === null ? false : distanceToStoreM <= allowedRadiusM;
 
   const handleTimeStamp = (field: "timeIn" | "timeOut") => {
     if (field === "timeIn" && trackingMode === "gps") {
       if (!startPoint) return showToast("ยังไม่ได้รับตำแหน่ง GPS — กดรีเฟรช GPS ก่อน", "error");
       if (!destPoint)
         return showToast("เลือกร้านค้าที่จะเช็คอินก่อน (ต้องมีพิกัดร้าน)", "error");
-      if (!withinCheckinRadius)
+      // บังคับรัศมีเฉพาะเมื่อได้พิกัดร้านจริง (จุดกลางอำเภอห่างได้หลายกิโลเมตร)
+      if (destPrecise && !withinCheckinRadius)
         return showToast(
           `เช็คอินได้เมื่ออยู่ในรัศมี ${checkinRadiusM} เมตรเท่านั้น (ปัจจุบันห่าง ${distanceToStoreM} ม.)`,
           "error",
