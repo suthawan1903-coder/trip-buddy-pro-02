@@ -674,12 +674,22 @@ function FormView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapInstance, startPoint, settings.checkinRadiusKm]);
 
-  /* ----------- auto list of nearby stores (wider scan than check-in) ------- */
+  /* ----------- auto list of nearby stores ---------------------------------
+   * Two passes so a 200 m radius is meaningful:
+   *  1) district centroids narrow the candidate list (cheap, cached)
+   *  2) every candidate store is geocoded by its own name -> real coordinates
+   * Distances are then recomputed live from the current GPS fix.
+   * ---------------------------------------------------------------------- */
   const checkinRadiusM = Math.round(settings.checkinRadiusKm * 1000);
   const scanRadiusKm = Math.max(settings.checkinRadiusKm, 5);
+  const [candidates, setCandidates] = useState<
+    { c: Customer; point: LatLng; precise: boolean }[]
+  >([]);
+
   useEffect(() => {
     if (!startPoint || customers.length === 0) return;
     let cancelled = false;
+    const anchor = startPoint;
     const scan = async () => {
       setScanningNearby(true);
       const provinces = Array.from(new Set(customers.map((c) => c.province).filter(Boolean)));
@@ -687,7 +697,7 @@ function FormView({
       for (const p of provinces) {
         if (cancelled) return;
         const point = await geocodeProvince(p);
-        if (point && haversineKm(startPoint, point) < 200) nearProvinces.push(p);
+        if (point && haversineKm(anchor, point) < 200) nearProvinces.push(p);
       }
       const districtKeys = Array.from(
         new Set(
@@ -697,24 +707,43 @@ function FormView({
         ),
       ).slice(0, 60);
 
-      const found: { c: Customer; km: number }[] = [];
+      // pass 1 — districts close enough to be worth a store-level lookup
+      const shortlist: Customer[] = [];
+      const found: { c: Customer; point: LatLng; precise: boolean }[] = [];
       for (const key of districtKeys) {
         if (cancelled) return;
         const [prov, dist] = key.split("|");
         const point = await geocodeDistrict(dist, prov);
         if (!point) continue;
-        const km = haversineKm(startPoint, point);
-        if (km <= scanRadiusKm) {
+        if (haversineKm(anchor, point) <= Math.max(scanRadiusKm, 25)) {
           customers
             .filter((c) => c.province === prov && c.district === dist)
-            .forEach((c) => found.push({ c, km: Math.round(km * 100) / 100 }));
-          if (!cancelled) setNearby([...found].sort((a, b) => a.km - b.km));
+            .forEach((c) => {
+              shortlist.push(c);
+              found.push({ c, point, precise: false });
+            });
+          if (!cancelled) setCandidates([...found]);
         }
       }
-      if (!cancelled) {
-        setNearby(found.sort((a, b) => a.km - b.km));
-        setScanningNearby(false);
+
+      // pass 2 — real store coordinates, closest districts first
+      const ordered = shortlist
+        .slice()
+        .sort(
+          (a, b) =>
+            haversineKm(anchor, found.find((f) => f.c === a)!.point) -
+            haversineKm(anchor, found.find((f) => f.c === b)!.point),
+        )
+        .slice(0, 60);
+      for (const c of ordered) {
+        if (cancelled) return;
+        const res = await geocodeStore(c.name, c.district, c.province);
+        if (!res?.precise) continue;
+        const idx = found.findIndex((f) => f.c === c);
+        if (idx !== -1) found[idx] = { c, point: res.point, precise: true };
+        if (!cancelled) setCandidates([...found]);
       }
+      if (!cancelled) setScanningNearby(false);
     };
     void scan();
     return () => {
@@ -722,6 +751,25 @@ function FormView({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startPoint === null, customers.length, scanRadiusKm]);
+
+  /** ร้านใกล้ตัว คำนวณระยะจากพิกัด GPS ล่าสุดทุกครั้ง */
+  const nearby = useMemo(() => {
+    if (!startPoint) return [] as { c: Customer; km: number; precise: boolean }[];
+    return candidates
+      .map(({ c, point, precise }) => ({
+        c,
+        km: Math.round(haversineKm(startPoint, point) * 1000) / 1000,
+        precise,
+      }))
+      .filter((n) => n.km <= scanRadiusKm)
+      .sort((a, b) => a.km - b.km);
+  }, [candidates, startPoint, scanRadiusKm]);
+
+  /** ทุกร้านที่อยู่ในรัศมีเช็คอิน (พิกัดร้านจริงเท่านั้น) */
+  const withinRadiusStores = useMemo(
+    () => nearby.filter((n) => n.precise && n.km * 1000 <= checkinRadiusM),
+    [nearby, checkinRadiusM],
+  );
 
   /* ------------------------------- routing -------------------------------- */
   const drawRoute = async (dest: LatLng, from: LatLng | null = startPoint) => {
