@@ -131,6 +131,30 @@ export function geocodeProvince(province: string) {
   return geocodeCached(`p|${province}`, `จังหวัด${province}, ประเทศไทย`);
 }
 
+/**
+ * Store-level geocode (precise). Falls back to the district centroid so the
+ * caller always gets a usable point, but reports which precision it used —
+ * a district centroid can be many km from the actual shop, so a 200 m
+ * check-in radius must never be enforced against it.
+ */
+export async function geocodeStore(
+  name: string,
+  district: string,
+  province: string,
+): Promise<{ point: LatLng; precise: boolean } | null> {
+  const cleanName = name.trim();
+  if (cleanName) {
+    const key = `s|${province}|${district}|${cleanName}`;
+    const q = [cleanName, district ? `อำเภอ${district}` : "", province ? `จังหวัด${province}` : "", "ประเทศไทย"]
+      .filter(Boolean)
+      .join(", ");
+    const point = await geocodeCached(key, q);
+    if (point) return { point, precise: true };
+  }
+  const fallback = await geocodeDistrict(district, province);
+  return fallback ? { point: fallback, precise: false } : null;
+}
+
 /** Read a cached point without triggering a network call. */
 export function peekGeocode(key: string): LatLng | null | undefined {
   const cache = readCache();
