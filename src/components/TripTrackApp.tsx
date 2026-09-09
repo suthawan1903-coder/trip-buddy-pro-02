@@ -76,6 +76,7 @@ import {
   fetchRoute,
   geocodeDistrict,
   geocodeProvince,
+  geocodeStore,
   getPosition,
   haversineKm,
   minutesBetween,
