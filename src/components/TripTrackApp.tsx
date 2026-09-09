@@ -459,9 +459,11 @@ function FormView({
   const [trackingMode, setTrackingMode] = useState<"gps" | "manual">("gps");
   const [startPoint, setStartPoint] = useState<LatLng | null>(null);
   const [destPoint, setDestPoint] = useState<LatLng | null>(null);
+  /** true = พิกัดร้านจริง, false = ใช้จุดกลางอำเภอ (ไม่แม่นพอจะบังคับรัศมี 200 ม.) */
+  const [destPrecise, setDestPrecise] = useState(false);
   const [vehicle, setVehicle] = useState<"car" | "pickup" | "motorcycle">("car");
   const [saving, setSaving] = useState(false);
-  const [nearby, setNearby] = useState<{ c: Customer; km: number }[]>([]);
+  const [nearby, setNearby] = useState<{ c: Customer; km: number; precise: boolean }[]>([]);
   const [scanningNearby, setScanningNearby] = useState(false);
   const [processingPhoto, setProcessingPhoto] = useState(false);
   const routeLayerRef = useRef<any>(null);
