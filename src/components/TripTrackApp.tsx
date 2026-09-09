@@ -805,12 +805,21 @@ function FormView({
     });
     setShowSuggestions(false);
     if (trackingMode !== "gps") return;
-    const point = await geocodeDistrict(c.district, c.province);
-    if (!point) {
-      showToast(`ไม่พบพิกัด อ.${c.district}`, "error");
+    // ใช้พิกัดร้านที่สแกนไว้ก่อน (แม่นที่สุด) แล้วค่อยค้นหาใหม่
+    const cached = candidates.find((x) => x.c === c || x.c.id === c.id);
+    const res =
+      cached?.precise
+        ? { point: cached.point, precise: true }
+        : await geocodeStore(c.name, c.district, c.province);
+    if (!res) {
+      showToast(`ไม่พบพิกัดร้าน ${c.name}`, "error");
       return;
     }
+    const point = res.point;
     setDestPoint(point);
+    setDestPrecise(res.precise);
+    if (!res.precise)
+      showToast("ไม่พบพิกัดร้านนี้ ใช้จุดกลางอำเภอแทน — ระบบจะไม่บังคับรัศมี", "error");
     if (mapInstance && window.L) {
       if (destMarkerRef.current) mapInstance.removeLayer(destMarkerRef.current);
       destMarkerRef.current = window.L
