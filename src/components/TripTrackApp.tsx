@@ -1173,28 +1173,68 @@ function FormView({
               </p>
             )}
 
-            <div className="space-y-2 max-h-56 overflow-y-auto">
-              {nearby.slice(0, 30).map(({ c, km }, i) => (
-                <button
-                  key={`${c.id}-${i}`}
-                  onClick={() => selectCustomer(c)}
-                  className={`w-full text-left p-3 rounded-xl border transition ${
-                    formData.place === c.name
-                      ? "border-blue-500 bg-blue-50 dark:bg-blue-950/40"
-                      : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/40"
-                  }`}
-                >
-                  <p className="text-sm font-semibold truncate">{c.name}</p>
-                  <p className="text-[11px] text-slate-500">
-                    อ.{c.district} จ.{c.province} · ห่าง ~{km.toFixed(2)} กม.
+            {/* ร้านที่เช็คอินได้ทันที (ในรัศมีที่ตั้งไว้) */}
+            <div className="space-y-2">
+              <p className="text-[11px] font-bold text-emerald-600">
+                เช็คอินได้ทันที — ในรัศมี {checkinRadiusM} เมตร ({withinRadiusStores.length} ร้าน)
+              </p>
+              <div className="space-y-2 max-h-52 overflow-y-auto">
+                {withinRadiusStores.map(({ c, km }, i) => (
+                  <button
+                    key={`in-${c.id}-${i}`}
+                    onClick={() => selectCustomer(c)}
+                    className={`w-full text-left p-3 rounded-xl border-2 transition ${
+                      formData.place === c.name
+                        ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40"
+                        : "border-emerald-200 dark:border-emerald-800 hover:bg-emerald-50/60 dark:hover:bg-emerald-950/30"
+                    }`}
+                  >
+                    <p className="text-sm font-semibold truncate">{c.name}</p>
+                    <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                      อ.{c.district} จ.{c.province} · ห่าง {Math.round(km * 1000)} ม.
+                    </p>
+                  </button>
+                ))}
+                {!scanningNearby && withinRadiusStores.length === 0 && (
+                  <p className="text-[11px] text-slate-400 py-1">
+                    ยังไม่พบร้านในรัศมี {checkinRadiusM} เมตร — เลื่อนดูร้านใกล้เคียงด้านล่าง
                   </p>
-                </button>
-              ))}
-              {!scanningNearby && nearby.length === 0 && (
-                <p className="text-[11px] text-slate-400 py-2">
-                  ยังไม่พบร้านในรัศมี {scanRadiusKm} กม. — เลือกร้านจากช่องค้นหาด้านล่างได้เลย
-                </p>
-              )}
+                )}
+              </div>
+            </div>
+
+            {/* ร้านใกล้เคียงในระยะกว้าง */}
+            <div className="space-y-2">
+              <p className="text-[11px] font-bold text-slate-500">
+                ร้านใกล้เคียง (ในระยะ {scanRadiusKm} กม.)
+              </p>
+              <div className="space-y-2 max-h-56 overflow-y-auto">
+                {nearby
+                  .filter((n) => !(n.precise && n.km * 1000 <= checkinRadiusM))
+                  .slice(0, 30)
+                  .map(({ c, km, precise }, i) => (
+                    <button
+                      key={`${c.id}-${i}`}
+                      onClick={() => selectCustomer(c)}
+                      className={`w-full text-left p-3 rounded-xl border transition ${
+                        formData.place === c.name
+                          ? "border-blue-500 bg-blue-50 dark:bg-blue-950/40"
+                          : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/40"
+                      }`}
+                    >
+                      <p className="text-sm font-semibold truncate">{c.name}</p>
+                      <p className="text-[11px] text-slate-500">
+                        อ.{c.district} จ.{c.province} · ห่าง ~{km.toFixed(2)} กม.
+                        {!precise ? " (ตำแหน่งประมาณ)" : ""}
+                      </p>
+                    </button>
+                  ))}
+                {!scanningNearby && nearby.length === 0 && (
+                  <p className="text-[11px] text-slate-400 py-2">
+                    ยังไม่พบร้านในรัศมี {scanRadiusKm} กม. — เลือกร้านจากช่องค้นหาด้านล่างได้เลย
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
