@@ -109,11 +109,6 @@ export default function ReportsView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const totals = useMemo(
-    () => computeTotals(reportTrips, settings.fuelEfficiency),
-    [reportTrips, settings.fuelEfficiency],
-  );
-
   const reportTrips: ReportTrip[] = useMemo(
     () =>
       rows.map((r) => ({
@@ -135,6 +130,11 @@ export default function ReportsView({
         salesTotal: Number(r.sales_total) || 0,
       })),
     [rows],
+  );
+
+  const totals = useMemo(
+    () => computeTotals(reportTrips, settings.fuelEfficiency),
+    [reportTrips, settings.fuelEfficiency],
   );
 
   const exportExcel = () => {
