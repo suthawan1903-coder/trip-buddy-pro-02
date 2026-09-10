@@ -62,12 +62,14 @@ export default function ReportsView({
   accessToken,
   groupId,
   personalUserId,
+  settings,
 }: {
   showToast: (m: string, t?: string) => void;
   lineNotifyToken?: string;
   accessToken: string;
   groupId: string;
   personalUserId: string;
+  settings: AppSettings;
 }) {
   const [from, setFrom] = useState(daysAgo(6));
   const [to, setTo] = useState(utcDateString());
