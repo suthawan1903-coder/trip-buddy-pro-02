@@ -111,6 +111,9 @@ export const buildReportText = (opts: {
       }`,
     );
     const meta = [
+      [tr.district ? `อ.${tr.district}` : "", tr.province ? `จ.${tr.province}` : ""]
+        .filter(Boolean)
+        .join(" "),
       `${tr.timeIn || "--:--"}-${tr.timeOut || "--:--"}`,
       formatMinutes(tr.durationMin ?? null),
       tr.jobType || "",
@@ -220,11 +223,28 @@ export const buildReportFlex = (opts: {
           color: "#111827",
           wrap: true,
         },
+        ...([tr.district ? `อ.${tr.district}` : "", tr.province ? `จ.${tr.province}` : ""]
+          .filter(Boolean)
+          .join(" ")
+          ? [
+              {
+                type: "text",
+                text: [tr.district ? `อ.${tr.district}` : "", tr.province ? `จ.${tr.province}` : ""]
+                  .filter(Boolean)
+                  .join(" "),
+                size: "xs",
+                color: "#9CA3AF",
+                wrap: true,
+              },
+            ]
+          : []),
         {
           type: "text",
-          text: `${Number(tr.dist).toFixed(1)} km · ${thb(Number(tr.cost))} · ${formatMinutes(
-            tr.durationMin ?? null,
-          )}${tr.jobType ? ` · ${tr.jobType}` : ""}`,
+          text: `${tr.timeIn || "--:--"}-${tr.timeOut || "--:--"} · ${Number(tr.dist).toFixed(
+            1,
+          )} km · ${thb(Number(tr.cost))} · ${formatMinutes(tr.durationMin ?? null)}${
+            tr.jobType ? ` · ${tr.jobType}` : ""
+          }`,
           size: "xs",
           color: "#6B7280",
           wrap: true,
