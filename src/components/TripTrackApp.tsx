@@ -366,6 +366,7 @@ export default function TripTrackApp() {
             accessToken={settings.lineToken}
             groupId={settings.lineGroupId}
             personalUserId={settings.lineUserId}
+            settings={settings}
           />
         )}
         {activeTab === "employees" && isAdmin && (

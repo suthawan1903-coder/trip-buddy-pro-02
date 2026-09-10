@@ -1,7 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import * as XLSX from "xlsx";
-import { CalendarRange, Download, Loader2, RefreshCw, User, Users } from "lucide-react";
+import {
+  CalendarRange,
+  Car,
+  Clock,
+  Coins,
+  Download,
+  Fuel,
+  Loader2,
+  Package,
+  RefreshCw,
+  Store,
+  User,
+  Users,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { notifyFlexReport } from "@/lib/line.functions";
 import {
@@ -9,11 +22,14 @@ import {
   buildReportFlex,
   buildReportText,
   buildSummaryFlex,
+  computeTotals,
   EXCEL_COL_WIDTHS,
+  thaiDate,
   type ReportTrip,
 } from "@/lib/report-format";
 import { formatMinutes, utcDateString } from "@/lib/geo";
 import { thb } from "@/lib/sales";
+import type { AppSettings } from "@/components/TripTrackApp";
 
 type ReportRow = {
   id: string;
@@ -46,12 +62,14 @@ export default function ReportsView({
   accessToken,
   groupId,
   personalUserId,
+  settings,
 }: {
   showToast: (m: string, t?: string) => void;
   lineNotifyToken?: string;
   accessToken: string;
   groupId: string;
   personalUserId: string;
+  settings: AppSettings;
 }) {
   const [from, setFrom] = useState(daysAgo(6));
   const [to, setTo] = useState(utcDateString());
@@ -91,15 +109,6 @@ export default function ReportsView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const totals = useMemo(() => {
-    const distance = rows.reduce((s, r) => s + Number(r.distance || 0), 0);
-    const cost = rows.reduce((s, r) => s + Number(r.cost || 0), 0);
-    const sales = rows.reduce((s, r) => s + Number(r.sales_total || 0), 0);
-    const minutes = rows.reduce((s, r) => s + Number(r.duration_min || 0), 0);
-    const staff = new Set(rows.map((r) => r.employee_name)).size;
-    return { distance, cost, sales, minutes, staff, checkins: rows.length };
-  }, [rows]);
-
   const reportTrips: ReportTrip[] = useMemo(
     () =>
       rows.map((r) => ({
@@ -121,6 +130,11 @@ export default function ReportsView({
         salesTotal: Number(r.sales_total) || 0,
       })),
     [rows],
+  );
+
+  const totals = useMemo(
+    () => computeTotals(reportTrips, settings.fuelEfficiency),
+    [reportTrips, settings.fuelEfficiency],
   );
 
   const exportExcel = () => {
