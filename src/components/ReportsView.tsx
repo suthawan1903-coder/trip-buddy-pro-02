@@ -1,7 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import * as XLSX from "xlsx";
-import { CalendarRange, Download, Loader2, RefreshCw, User, Users } from "lucide-react";
+import {
+  CalendarRange,
+  Car,
+  Clock,
+  Coins,
+  Download,
+  Fuel,
+  Loader2,
+  Package,
+  RefreshCw,
+  Store,
+  User,
+  Users,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { notifyFlexReport } from "@/lib/line.functions";
 import {
@@ -9,11 +22,14 @@ import {
   buildReportFlex,
   buildReportText,
   buildSummaryFlex,
+  computeTotals,
   EXCEL_COL_WIDTHS,
+  thaiDate,
   type ReportTrip,
 } from "@/lib/report-format";
 import { formatMinutes, utcDateString } from "@/lib/geo";
 import { thb } from "@/lib/sales";
+import type { AppSettings } from "@/components/TripTrackApp";
 
 type ReportRow = {
   id: string;
