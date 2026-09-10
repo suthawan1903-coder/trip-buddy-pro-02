@@ -109,14 +109,10 @@ export default function ReportsView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const totals = useMemo(() => {
-    const distance = rows.reduce((s, r) => s + Number(r.distance || 0), 0);
-    const cost = rows.reduce((s, r) => s + Number(r.cost || 0), 0);
-    const sales = rows.reduce((s, r) => s + Number(r.sales_total || 0), 0);
-    const minutes = rows.reduce((s, r) => s + Number(r.duration_min || 0), 0);
-    const staff = new Set(rows.map((r) => r.employee_name)).size;
-    return { distance, cost, sales, minutes, staff, checkins: rows.length };
-  }, [rows]);
+  const totals = useMemo(
+    () => computeTotals(reportTrips, settings.fuelEfficiency),
+    [reportTrips, settings.fuelEfficiency],
+  );
 
   const reportTrips: ReportTrip[] = useMemo(
     () =>
