@@ -316,8 +316,22 @@ export default function ReportsView({
                 <div className="min-w-0">
                   <p className="font-bold text-sm truncate">{r.place}</p>
                   <p className="text-[11px] text-slate-500 truncate">
-                    {r.trip_date} · {r.employee_name} · {formatMinutes(r.duration_min)}
+                    {[r.district ? `อ.${r.district}` : "", r.province ? `จ.${r.province}` : ""]
+                      .filter(Boolean)
+                      .join(" ") || "ไม่ระบุพื้นที่"}
                   </p>
+                  <p className="text-[11px] text-slate-500 truncate">
+                    {r.trip_date} · {r.employee_name}
+                    {r.employee_position ? ` (${r.employee_position})` : ""}
+                  </p>
+                  <p className="text-[11px] text-slate-400 truncate">
+                    {(r.time_in || "--:--")}-{(r.time_out || "--:--")} ·{" "}
+                    {formatMinutes(r.duration_min)}
+                    {r.job_type ? ` · ${r.job_type}` : ""}
+                  </p>
+                  {r.job && (
+                    <p className="text-[11px] text-slate-400 line-clamp-2">{r.job}</p>
+                  )}
                 </div>
                 <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-700 whitespace-nowrap">
                   {r.status}
