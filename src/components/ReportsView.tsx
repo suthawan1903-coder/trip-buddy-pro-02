@@ -304,73 +304,65 @@ export default function ReportsView({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        {[
-          { label: "เช็คอิน", value: `${totals.checkins} ร้าน` },
-          { label: "ระยะทางรวม", value: `${totals.distance.toFixed(1)} กม.` },
-          { label: "ค่าเดินทาง", value: thb(totals.cost) },
-          { label: "ยอดขายรวม", value: thb(totals.sales) },
-        ].map((c) => (
-          <div key={c.label} className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm">
-            <p className="text-[11px] text-slate-500 font-bold">{c.label}</p>
-            <p className="text-lg font-extrabold">{c.value}</p>
-          </div>
-        ))}
-      </div>
-
       {loading ? (
         <div className="grid place-items-center py-10 text-slate-400">
           <Loader2 className="animate-spin" />
         </div>
       ) : (
-        <div className="space-y-2.5">
-          {rows.map((r) => (
-            <div key={r.id} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="font-bold text-sm truncate">{r.place}</p>
-                  <p className="text-[11px] text-slate-500 truncate">
-                    {[r.district ? `อ.${r.district}` : "", r.province ? `จ.${r.province}` : ""]
-                      .filter(Boolean)
-                      .join(" ") || "ไม่ระบุพื้นที่"}
-                  </p>
-                  <p className="text-[11px] text-slate-500 truncate">
-                    {r.trip_date} · {r.employee_name}
-                    {r.employee_position ? ` (${r.employee_position})` : ""}
-                  </p>
-                  <p className="text-[11px] text-slate-400 truncate">
-                    {(r.time_in || "--:--")}-{(r.time_out || "--:--")} ·{" "}
-                    {formatMinutes(r.duration_min)}
-                    {r.job_type ? ` · ${r.job_type}` : ""}
-                  </p>
-                  {r.job && (
-                    <p className="text-[11px] text-slate-400 line-clamp-2">{r.job}</p>
-                  )}
-                </div>
-                <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-700 whitespace-nowrap">
-                  {r.status}
-                </span>
-              </div>
-              <p className="text-sm font-bold mt-1">
-                {Number(r.distance).toFixed(2)} กม. · {thb(Number(r.cost))}
-                {Number(r.sales_total) > 0 && (
-                  <span className="ml-2 text-emerald-600">ขาย {thb(Number(r.sales_total))}</span>
-                )}
-              </p>
-              {(r.sales_items ?? []).length > 0 && (
-                <ul className="mt-1 text-[11px] text-slate-500 space-y-0.5">
-                  {(r.sales_items ?? []).map((i, idx) => (
-                    <li key={idx}>
-                      • {i.name} × {i.qty} = {thb(i.total)}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          ))}
-          {rows.length === 0 && (
-            <p className="text-center text-sm text-slate-400 py-8">ไม่พบข้อมูลในช่วงวันที่นี้</p>
-          )}
+        /* ===== การ์ดสรุปการทำงานสไตล์ LINE ===== */
+        <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-lg overflow-hidden">
+          {/* Header */}
+          <div className="bg-indigo-600 text-white px-5 py-4">
+            <p className="font-extrabold text-base">รายงานสรุปการทำงาน</p>
+            <p className="text-xs text-indigo-100">
+              วันที่ {thaiDate(from)}{from !== to ? ` - ${thaiDate(to)}` : ""}
+            </p>
+            <p className="text-xs text-indigo-100">
+              พนักงาน: {employee.trim() || "ทุกคน"}
+            </p>
+          </div>
+
+          {/* ส่วนที่ 1: สรุปภาพรวม */}
+          <div className="p-5 space-y-2.5">
+            <p className="font-bold text-indigo-600 text-sm">สรุปภาพรวม</p>
+            <SummaryRow icon={<Store size={16} />} label="เช็คอิน" value={`${totals.stores} ร้าน`} />
+            <SummaryRow icon={<Car size={16} />} label="ระยะทางรวม" value={`${totals.distance.toFixed(1)} กม.`} />
+            <SummaryRow
+              icon={<Fuel size={16} />}
+              label="ค่าน้ำมัน/ค่าเดินทาง"
+              value={`${thb(totals.cost)}${settings.fuelPrice > 0 ? ` (฿${settings.fuelPrice}/ล.)` : ""}`}
+            />
+            <SummaryRow icon={<Clock size={16} />} label="เวลาปฏิบัติงาน" value={`${totals.minutes} นาที`} />
+            <SummaryRow icon={<Package size={16} />} label="สินค้าที่ขาย" value={`Handset ${totals.handsets} - SIM ${totals.sims}`} />
+            <SummaryRow icon={<Coins size={16} />} label="ยอดขายรวม" value={thb(totals.sales)} />
+          </div>
+
+          {/* ส่วนที่ 2: รายละเอียดการเช็คอิน */}
+          <div className="border-t border-slate-100 dark:border-slate-700 p-5">
+            <p className="font-bold text-indigo-600 text-sm mb-3">รายละเอียดการเช็คอิน</p>
+            {rows.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">ไม่พบข้อมูลในช่วงวันที่นี้</p>
+            ) : (
+              <ol className="space-y-3">
+                {rows.map((r, i) => (
+                  <li key={r.id} className="flex gap-3">
+                    <span className="w-6 h-6 shrink-0 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 text-[11px] font-extrabold grid place-items-center mt-0.5">
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-bold text-sm truncate">
+                        {r.place}
+                        {r.district ? ` (${r.district})` : ""}
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        {Number(r.distance).toFixed(2)} กม. - {thb(Number(r.cost))} - {r.job_type || "เยี่ยมร้านค้า"}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
         </div>
       )}
     </div>
