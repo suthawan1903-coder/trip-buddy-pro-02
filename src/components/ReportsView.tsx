@@ -2,6 +2,17 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { useServerFn } from "@tanstack/react-start";
 import * as XLSX from "xlsx";
 import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
+  BarChart3,
   CalendarRange,
   Car,
   Clock,
@@ -16,6 +27,7 @@ import {
   Users,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { TripThumbnails, useLightbox } from "@/components/ImageLightbox";
 import { notifyFlexReport } from "@/lib/line.functions";
 import {
   buildExcelAoa,
