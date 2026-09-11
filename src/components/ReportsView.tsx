@@ -57,6 +57,19 @@ const daysAgo = (n: number) => {
   return d.toISOString().slice(0, 10);
 };
 
+/** แถวสรุปพร้อมไอคอน (สไตล์ LINE summary row) */
+function SummaryRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 grid place-items-center shrink-0">
+        {icon}
+      </span>
+      <span className="text-xs text-slate-500 font-bold flex-1">{label}</span>
+      <span className="text-sm font-extrabold text-right">{value}</span>
+    </div>
+  );
+}
+
 export default function ReportsView({
   showToast,
   accessToken,
