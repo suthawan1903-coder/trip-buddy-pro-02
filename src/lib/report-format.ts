@@ -188,6 +188,38 @@ export const buildSummaryFlex = (opts: {
       contents: [
         { type: "text", text: "สรุปภาพรวม", weight: "bold", size: "sm", color: "#2563EB" },
         ...summaryRows(t, fuelPrice),
+        { type: "separator", margin: "lg" },
+        {
+          type: "text",
+          text: "ร้านที่เช็คอิน",
+          weight: "bold",
+          size: "sm",
+          color: "#2563EB",
+          margin: "lg",
+        },
+        ...(trips.length === 0
+          ? [{ type: "text", text: "ไม่มีรายการ", size: "xs", color: "#6B7280" }]
+          : trips.slice(0, 12).map((tr, i) => ({
+              type: "text",
+              text: `${i + 1}. ${tr.place}${tr.district ? ` (${tr.district})` : ""} · ${Number(
+                tr.dist,
+              ).toFixed(1)} km · ${thb(Number(tr.cost))}`,
+              size: "xs",
+              color: "#374151",
+              wrap: true,
+              margin: "sm",
+            }))),
+        ...(trips.length > 12
+          ? [
+              {
+                type: "text",
+                text: `… และอีก ${trips.length - 12} ร้าน`,
+                size: "xs",
+                color: "#6B7280",
+                margin: "sm",
+              },
+            ]
+          : []),
       ],
     },
   };

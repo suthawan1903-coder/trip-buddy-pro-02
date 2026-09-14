@@ -61,6 +61,7 @@ type ReportRow = {
   status: string;
   sales_total: number;
   sales_items: { name: string; qty: number; unitPrice: number; total: number }[] | null;
+  images: string[] | null;
 };
 
 const daysAgo = (n: number) => {
@@ -102,7 +103,9 @@ export default function ReportsView({
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState<"group" | "personal" | null>(null);
+  const [employeeOptions, setEmployeeOptions] = useState<string[]>([]);
   const notify = useServerFn(notifyFlexReport);
+  const lightbox = useLightbox();
 
   const load = useCallback(async () => {
     if (from > to) {
@@ -114,14 +117,14 @@ export default function ReportsView({
     let query = supabase
       .from("trips")
       .select(
-        "id, trip_date, employee_name, employee_position, place, province, district, time_in, time_out, distance, cost, duration_min, job, job_type, status, sales_total, sales_items",
+        "id, trip_date, employee_name, employee_position, place, province, district, time_in, time_out, distance, cost, duration_min, job, job_type, status, sales_total, sales_items, images",
       )
       .gte("trip_date", from)
       .lte("trip_date", to)
       .order("trip_date", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(2000);
-    if (employee.trim()) query = query.ilike("employee_name", `%${employee.trim()}%`);
+    if (employee.trim()) query = query.eq("employee_name", employee.trim());
     const { data, error } = await query;
     if (error) showToast(error.message, "error");
     else setRows((data ?? []) as unknown as ReportRow[]);
@@ -129,10 +132,30 @@ export default function ReportsView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [from, to, employee]);
 
+  /** รายชื่อพนักงานที่มีการเช็คอินในช่วงวันที่ที่เลือก (สำหรับ dropdown) */
+  const loadEmployeeOptions = useCallback(async () => {
+    if (from > to) return;
+    const { data } = await supabase
+      .from("trips")
+      .select("employee_name")
+      .gte("trip_date", from)
+      .lte("trip_date", to)
+      .limit(5000);
+    const names = Array.from(
+      new Set(((data ?? []) as { employee_name: string }[]).map((r) => r.employee_name).filter(Boolean)),
+    ).sort((a, b) => a.localeCompare(b, "th"));
+    setEmployeeOptions(names);
+    setEmployee((cur) => (cur && !names.includes(cur) ? "" : cur));
+  }, [from, to]);
+
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    void loadEmployeeOptions();
+  }, [loadEmployeeOptions]);
 
   const reportTrips: ReportTrip[] = useMemo(
     () =>
@@ -161,6 +184,26 @@ export default function ReportsView({
     () => computeTotals(reportTrips, settings.fuelEfficiency),
     [reportTrips, settings.fuelEfficiency],
   );
+
+  /** ข้อมูลกราฟแท่งรายวัน: ระยะทาง (กม.) และค่าใช้จ่าย (บาท) */
+  const chartData = useMemo(() => {
+    const map = new Map<string, { date: string; distance: number; cost: number }>();
+    for (const r of rows) {
+      const key = r.trip_date;
+      const cur = map.get(key) ?? { date: key, distance: 0, cost: 0 };
+      cur.distance += Number(r.distance) || 0;
+      cur.cost += Number(r.cost) || 0;
+      map.set(key, cur);
+    }
+    return Array.from(map.values())
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((d) => ({
+        ...d,
+        label: d.date.slice(5).replace("-", "/"),
+        distance: Number(d.distance.toFixed(1)),
+        cost: Number(d.cost.toFixed(0)),
+      }));
+  }, [rows]);
 
   const exportExcel = () => {
     if (rows.length === 0) return showToast("ไม่มีข้อมูลให้ส่งออก", "error");
@@ -262,12 +305,26 @@ export default function ReportsView({
           </label>
         </div>
 
-        <input
-          value={employee}
-          onChange={(e) => setEmployee(e.target.value)}
-          placeholder="กรองชื่อพนักงาน (เว้นว่าง = ทุกคน)"
-          className="w-full h-11 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 text-sm outline-none"
-        />
+        <label className="block text-[11px] font-bold text-slate-500">
+          กรองชื่อพนักงาน
+          <select
+            value={employee}
+            onChange={(e) => setEmployee(e.target.value)}
+            className="mt-1 w-full h-11 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 text-sm outline-none"
+          >
+            <option value="">ทุกคน</option>
+            {employeeOptions.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+          {employeeOptions.length === 0 && (
+            <span className="block mt-1 font-normal text-slate-400">
+              ไม่พบพนักงานที่เช็คอินในช่วงวันที่นี้
+            </span>
+          )}
+        </label>
 
         <div className="flex flex-wrap gap-2">
           {[
@@ -329,6 +386,32 @@ export default function ReportsView({
         </div>
       </div>
 
+      {!loading && chartData.length > 0 && (
+        <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-lg p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <BarChart3 size={16} className="text-indigo-600" />
+            <p className="font-bold text-sm">ระยะทาง / ค่าใช้จ่าย รายวัน</p>
+          </div>
+          <div className="h-56 -ml-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} width={38} />
+                <Tooltip
+                  formatter={(v: number, n: string) =>
+                    n === "ค่าใช้จ่าย (บาท)" ? thb(Number(v)) : `${v} กม.`
+                  }
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="distance" name="ระยะทาง (กม.)" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="cost" name="ค่าใช้จ่าย (บาท)" fill="#10b981" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="grid place-items-center py-10 text-slate-400">
           <Loader2 className="animate-spin" />
@@ -374,14 +457,26 @@ export default function ReportsView({
                     <span className="w-6 h-6 shrink-0 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 text-[11px] font-extrabold grid place-items-center mt-0.5">
                       {i + 1}
                     </span>
-                    <div className="min-w-0">
-                      <p className="font-bold text-sm truncate">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-sm break-words">
                         {r.place}
                         {r.district ? ` (${r.district})` : ""}
                       </p>
                       <p className="text-[11px] text-slate-500">
                         {Number(r.distance).toFixed(2)} กม. - {thb(Number(r.cost))} - {r.job_type || "เยี่ยมร้านค้า"}
                       </p>
+                      <p className="text-[11px] text-slate-400">
+                        {r.trip_date} · {r.employee_name}
+                        {r.time_in || r.time_out ? ` · ${r.time_in || "--:--"}-${r.time_out || "--:--"}` : ""}
+                        {r.duration_min ? ` · ${formatMinutes(r.duration_min)}` : ""}
+                      </p>
+                      <div className="mt-2">
+                        <TripThumbnails
+                          images={Array.isArray(r.images) ? r.images : []}
+                          onOpen={lightbox.open}
+                          label={r.place}
+                        />
+                      </div>
                     </div>
                   </li>
                 ))}
@@ -390,6 +485,8 @@ export default function ReportsView({
           </div>
         </div>
       )}
+
+      {lightbox.node}
     </div>
   );
 }
