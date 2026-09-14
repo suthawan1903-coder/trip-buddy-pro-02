@@ -386,6 +386,32 @@ export default function ReportsView({
         </div>
       </div>
 
+      {!loading && chartData.length > 0 && (
+        <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-lg p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <BarChart3 size={16} className="text-indigo-600" />
+            <p className="font-bold text-sm">ระยะทาง / ค่าใช้จ่าย รายวัน</p>
+          </div>
+          <div className="h-56 -ml-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} width={38} />
+                <Tooltip
+                  formatter={(v: number, n: string) =>
+                    n === "ค่าใช้จ่าย (บาท)" ? thb(Number(v)) : `${v} กม.`
+                  }
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="distance" name="ระยะทาง (กม.)" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="cost" name="ค่าใช้จ่าย (บาท)" fill="#10b981" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="grid place-items-center py-10 text-slate-400">
           <Loader2 className="animate-spin" />
