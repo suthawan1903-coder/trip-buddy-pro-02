@@ -61,6 +61,7 @@ type ReportRow = {
   status: string;
   sales_total: number;
   sales_items: { name: string; qty: number; unitPrice: number; total: number }[] | null;
+  images: string[] | null;
 };
 
 const daysAgo = (n: number) => {
