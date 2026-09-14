@@ -431,14 +431,26 @@ export default function ReportsView({
                     <span className="w-6 h-6 shrink-0 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 text-[11px] font-extrabold grid place-items-center mt-0.5">
                       {i + 1}
                     </span>
-                    <div className="min-w-0">
-                      <p className="font-bold text-sm truncate">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-sm break-words">
                         {r.place}
                         {r.district ? ` (${r.district})` : ""}
                       </p>
                       <p className="text-[11px] text-slate-500">
                         {Number(r.distance).toFixed(2)} กม. - {thb(Number(r.cost))} - {r.job_type || "เยี่ยมร้านค้า"}
                       </p>
+                      <p className="text-[11px] text-slate-400">
+                        {r.trip_date} · {r.employee_name}
+                        {r.time_in || r.time_out ? ` · ${r.time_in || "--:--"}-${r.time_out || "--:--"}` : ""}
+                        {r.duration_min ? ` · ${formatMinutes(r.duration_min)}` : ""}
+                      </p>
+                      <div className="mt-2">
+                        <TripThumbnails
+                          images={Array.isArray(r.images) ? r.images : []}
+                          onOpen={lightbox.open}
+                          label={r.place}
+                        />
+                      </div>
                     </div>
                   </li>
                 ))}
@@ -447,6 +459,8 @@ export default function ReportsView({
           </div>
         </div>
       )}
+
+      {lightbox.node}
     </div>
   );
 }
