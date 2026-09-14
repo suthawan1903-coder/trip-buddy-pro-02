@@ -305,12 +305,26 @@ export default function ReportsView({
           </label>
         </div>
 
-        <input
-          value={employee}
-          onChange={(e) => setEmployee(e.target.value)}
-          placeholder="กรองชื่อพนักงาน (เว้นว่าง = ทุกคน)"
-          className="w-full h-11 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 text-sm outline-none"
-        />
+        <label className="block text-[11px] font-bold text-slate-500">
+          กรองชื่อพนักงาน
+          <select
+            value={employee}
+            onChange={(e) => setEmployee(e.target.value)}
+            className="mt-1 w-full h-11 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 text-sm outline-none"
+          >
+            <option value="">ทุกคน</option>
+            {employeeOptions.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+          {employeeOptions.length === 0 && (
+            <span className="block mt-1 font-normal text-slate-400">
+              ไม่พบพนักงานที่เช็คอินในช่วงวันที่นี้
+            </span>
+          )}
+        </label>
 
         <div className="flex flex-wrap gap-2">
           {[
