@@ -185,6 +185,26 @@ export default function ReportsView({
     [reportTrips, settings.fuelEfficiency],
   );
 
+  /** ข้อมูลกราฟแท่งรายวัน: ระยะทาง (กม.) และค่าใช้จ่าย (บาท) */
+  const chartData = useMemo(() => {
+    const map = new Map<string, { date: string; distance: number; cost: number }>();
+    for (const r of rows) {
+      const key = r.trip_date;
+      const cur = map.get(key) ?? { date: key, distance: 0, cost: 0 };
+      cur.distance += Number(r.distance) || 0;
+      cur.cost += Number(r.cost) || 0;
+      map.set(key, cur);
+    }
+    return Array.from(map.values())
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((d) => ({
+        ...d,
+        label: d.date.slice(5).replace("-", "/"),
+        distance: Number(d.distance.toFixed(1)),
+        cost: Number(d.cost.toFixed(0)),
+      }));
+  }, [rows]);
+
   const exportExcel = () => {
     if (rows.length === 0) return showToast("ไม่มีข้อมูลให้ส่งออก", "error");
     const aoa = buildExcelAoa({
