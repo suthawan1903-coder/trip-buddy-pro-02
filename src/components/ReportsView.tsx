@@ -103,7 +103,9 @@ export default function ReportsView({
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState<"group" | "personal" | null>(null);
+  const [employeeOptions, setEmployeeOptions] = useState<string[]>([]);
   const notify = useServerFn(notifyFlexReport);
+  const lightbox = useLightbox();
 
   const load = useCallback(async () => {
     if (from > to) {
@@ -115,14 +117,14 @@ export default function ReportsView({
     let query = supabase
       .from("trips")
       .select(
-        "id, trip_date, employee_name, employee_position, place, province, district, time_in, time_out, distance, cost, duration_min, job, job_type, status, sales_total, sales_items",
+        "id, trip_date, employee_name, employee_position, place, province, district, time_in, time_out, distance, cost, duration_min, job, job_type, status, sales_total, sales_items, images",
       )
       .gte("trip_date", from)
       .lte("trip_date", to)
       .order("trip_date", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(2000);
-    if (employee.trim()) query = query.ilike("employee_name", `%${employee.trim()}%`);
+    if (employee.trim()) query = query.eq("employee_name", employee.trim());
     const { data, error } = await query;
     if (error) showToast(error.message, "error");
     else setRows((data ?? []) as unknown as ReportRow[]);
@@ -130,10 +132,30 @@ export default function ReportsView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [from, to, employee]);
 
+  /** รายชื่อพนักงานที่มีการเช็คอินในช่วงวันที่ที่เลือก (สำหรับ dropdown) */
+  const loadEmployeeOptions = useCallback(async () => {
+    if (from > to) return;
+    const { data } = await supabase
+      .from("trips")
+      .select("employee_name")
+      .gte("trip_date", from)
+      .lte("trip_date", to)
+      .limit(5000);
+    const names = Array.from(
+      new Set(((data ?? []) as { employee_name: string }[]).map((r) => r.employee_name).filter(Boolean)),
+    ).sort((a, b) => a.localeCompare(b, "th"));
+    setEmployeeOptions(names);
+    setEmployee((cur) => (cur && !names.includes(cur) ? "" : cur));
+  }, [from, to]);
+
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    void loadEmployeeOptions();
+  }, [loadEmployeeOptions]);
 
   const reportTrips: ReportTrip[] = useMemo(
     () =>
