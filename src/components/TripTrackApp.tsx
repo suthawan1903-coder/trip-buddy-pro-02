@@ -92,10 +92,13 @@ declare global {
   }
 }
 
-const vehicleRates: Record<string, { name: string; rate: number; kmPerLitre: number }> = {
-  car: { name: "รถยนต์", rate: 4.5, kmPerLitre: 12 },
-  pickup: { name: "รถกระบะ", rate: 5.0, kmPerLitre: 10 },
-  motorcycle: { name: "มอเตอร์ไซค์", rate: 2.0, kmPerLitre: 35 },
+const vehicleRates: Record<
+  string,
+  { name: string; rate: number; kmPerLitre: number; fuelKey: string; fuelName: string }
+> = {
+  car: { name: "รถยนต์", rate: 4.5, kmPerLitre: 12, fuelKey: "gasohol_95", fuelName: "แก๊สโซฮอล์ 95" },
+  pickup: { name: "รถกระบะ", rate: 5.0, kmPerLitre: 10, fuelKey: "diesel_b7", fuelName: "ดีเซล B7" },
+  motorcycle: { name: "มอเตอร์ไซค์", rate: 2.0, kmPerLitre: 35, fuelKey: "gasohol_95", fuelName: "แก๊สโซฮอล์ 95" },
 };
 
 const JOB_PRESETS = [
@@ -493,7 +496,27 @@ function FormView({
   const [customers, setCustomers] = useState<Customer[]>(mockCustomers);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
 
-  const efficiency = settings.fuelEfficiency > 0 ? settings.fuelEfficiency : vehicleRates[vehicle].kmPerLitre;
+  // ชนิดน้ำมันผูกกับประเภทรถ: เลือกรถ → ดึงราคาน้ำมันชนิดนั้น + อัตราสิ้นเปลืองให้อัตโนมัติ
+  const [vehicleFuel, setVehicleFuel] = useState<{ vehicle: string; name: string; price: number } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const v = vehicleRates[vehicle]!;
+    fetchPttFuelPrices()
+      .then((d) => {
+        const hit =
+          d.prices.find((p) => p.key === v.fuelKey) ??
+          (v.fuelKey === "diesel_b7" ? d.prices.find((p) => p.key === "diesel") : undefined);
+        if (alive && hit) setVehicleFuel({ vehicle, name: v.fuelName, price: hit.price });
+        else if (alive) setVehicleFuel(null);
+      })
+      .catch(() => alive && setVehicleFuel(null));
+    return () => {
+      alive = false;
+    };
+  }, [vehicle]);
+  const activeFuel = vehicleFuel && vehicleFuel.vehicle === vehicle ? vehicleFuel : null;
+  const efficiency = vehicleRates[vehicle]!.kmPerLitre;
+  const fuelPriceNow = activeFuel?.price ?? settings.fuelPrice;
 
   /* --- automatic date from universal time (UTC), refreshed every minute --- */
   useEffect(() => {
@@ -868,10 +891,10 @@ function FormView({
       tryCalculateFuelCost({
         distanceKm: finalDistance,
         fuelEfficiency: efficiency,
-        fuelPrice: settings.fuelPrice,
+        fuelPrice: fuelPriceNow,
         ratePerKm: settings.ratePerKm,
       }),
-    [finalDistance, efficiency, settings.fuelPrice, settings.ratePerKm],
+    [finalDistance, efficiency, fuelPriceNow, settings.ratePerKm],
   );
 
   const autoCost = costResult.ok ? costResult.data.fuelCost : 0;
@@ -1032,7 +1055,7 @@ function FormView({
           lng: destPoint?.[1] ?? startPoint?.[1] ?? null,
           duration_min: workMinutes,
           route_min: routeMin,
-          fuel_price: settings.fuelPrice,
+          fuel_price: fuelPriceNow,
           fuel_efficiency: efficiency,
           rate_per_km: settings.ratePerKm,
         })
@@ -1253,7 +1276,9 @@ function FormView({
               <Metric label="ค่าเดินทาง" value={`฿${finalCost.toFixed(2)}`} tone="green" />
             </div>
             <p className="text-[11px] text-slate-500">
-              สูตรสากล: (ระยะทาง ÷ {efficiency} กม./ลิตร) × ฿{settings.fuelPrice}/ลิตร ={" "}
+              ⛽ {vehicleRates[vehicle]!.name} · {activeFuel ? activeFuel.name : "ราคาตั้งค่า"} ฿{fuelPriceNow}/ลิตร
+              <br />
+              สูตรสากล: (ระยะทาง ÷ {efficiency} กม./ลิตร) × ฿{fuelPriceNow}/ลิตร ={" "}
               {litres.toFixed(2)} ลิตร
               {settings.ratePerKm > 0 && ` · ใช้เรทเหมา ฿${settings.ratePerKm}/กม.`}
             </p>
