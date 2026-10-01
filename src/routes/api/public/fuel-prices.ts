@@ -59,6 +59,11 @@ function normalizeThaiOilApi(json: unknown): FuelPricePayload | null {
     prices.push({ key, name: label(key, value.name), price: Math.round(price * 100) / 100 });
   }
   if (prices.length === 0) return null;
+  // ดีเซลมาตรฐานของ ปตท. คือ B7 — ถ้าต้นทางไม่ส่งแยกมา ให้แสดงปุ่ม "ดีเซล B7" จากราคาดีเซล
+  if (!prices.some((p) => p.key === "diesel_b7")) {
+    const d = prices.find((p) => p.key === "diesel");
+    if (d) prices.unshift({ key: "diesel_b7", name: THAI_LABELS["diesel_b7"]!, price: d.price });
+  }
 
 
   return {
