@@ -1,0 +1,2 @@
+CREATE POLICY "trip photos read own or admin" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'trip-photos' AND ((storage.foldername(name))[1] = auth.uid()::text OR public.has_role(auth.uid(), 'admin')));
+CREATE POLICY "trip photos own upload" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'trip-photos' AND (storage.foldername(name))[1] = auth.uid()::text);
