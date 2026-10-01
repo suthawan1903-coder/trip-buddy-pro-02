@@ -164,6 +164,7 @@ export const notifyFlexReport = createServerFn({ method: "POST" })
       altText: string;
       flex: unknown;
       fallbackText?: string;
+      photos?: { title: string; subtitle?: string; url: string }[];
     }) => {
       if (!input?.accessToken?.trim()) throw new Error("ยังไม่ได้ตั้งค่า Channel access token");
       if (!["group", "personal", "broadcast"].includes(input?.targetType))
@@ -178,7 +179,7 @@ export const notifyFlexReport = createServerFn({ method: "POST" })
     },
   )
   .handler(async ({ data }) => {
-    const { accessToken, targetType, targetId, altText, flex, fallbackText } = data;
+    const { accessToken, targetType, targetId, altText, flex, fallbackText, photos } = data;
 
     if (targetType === "group" && !/^[CR]/.test(targetId ?? ""))
       throw new Error("Group ID ต้องขึ้นต้นด้วย C (หรือ R) — ดูได้จาก webhook event source.groupId");
@@ -190,6 +191,43 @@ export const notifyFlexReport = createServerFn({ method: "POST" })
     ];
     if (fallbackText?.trim())
       messages.push({ type: "text", text: fallbackText.slice(0, 4900) });
+
+    // รูปหน้างาน: Carousel เลื่อนซ้าย-ขวา (สูงสุด 10 การ์ด/ข้อความ, รวมทั้งหมด ≤ 5 ข้อความ)
+    // ร้านที่ไม่มีรูป หรือ URL ไม่ใช่ https จะถูกข้ามไปอัตโนมัติ
+    const valid = (photos ?? []).filter(
+      (p) => typeof p?.url === "string" && /^https:\/\//.test(p.url) && p.url.length <= 2000,
+    );
+    const slots = 5 - messages.length;
+    for (let i = 0; i < valid.length && i / 10 < slots; i += 10) {
+      const bubbles = valid.slice(i, i + 10).map((p) => ({
+        type: "bubble",
+        size: "kilo",
+        hero: {
+          type: "image",
+          url: p.url,
+          size: "full",
+          aspectRatio: "4:3",
+          aspectMode: "cover",
+          action: { type: "uri", uri: p.url },
+        },
+        body: {
+          type: "box",
+          layout: "vertical",
+          paddingAll: "12px",
+          contents: [
+            { type: "text", text: (p.title || "ร้านค้า").slice(0, 60), weight: "bold", size: "sm", wrap: true },
+            ...(p.subtitle
+              ? [{ type: "text", text: p.subtitle.slice(0, 80), size: "xs", color: "#888888", wrap: true }]
+              : []),
+          ],
+        },
+      }));
+      messages.push({
+        type: "flex",
+        altText: `รูปหน้างาน (${bubbles.length} ร้าน)`,
+        contents: { type: "carousel", contents: bubbles },
+      });
+    }
 
     const endpoint =
       targetType === "broadcast"
