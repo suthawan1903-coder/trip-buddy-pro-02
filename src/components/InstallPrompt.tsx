@@ -44,7 +44,7 @@ export default function InstallPrompt() {
   if (dismissed || (!deferred && !showIosHint)) return null;
 
   return (
-    <div className="mx-4 mb-3 flex items-start gap-3 rounded-2xl border border-border bg-card p-3 shadow-sm">
+    <div className="mx-3 mb-3 flex max-w-full items-start gap-3 rounded-2xl border border-border bg-card p-3 shadow-sm sm:mx-4">
       <div className="rounded-xl bg-secondary p-2 text-secondary-foreground">
         <Download className="h-5 w-5" />
       </div>

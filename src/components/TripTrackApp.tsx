@@ -286,28 +286,28 @@ export default function TripTrackApp() {
 
   return (
     <div
-      className={`min-h-screen ${
+      className={`min-h-[100dvh] w-full max-w-full overflow-x-hidden ${
         isDarkMode
           ? "dark bg-slate-950 text-slate-100"
           : "bg-gradient-to-br from-slate-50 via-blue-50/40 to-slate-100 text-slate-900"
-      } pb-24`}
+      } pb-[calc(7.75rem+env(safe-area-inset-bottom))]`}
     >
-      <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-800 sticky top-0 z-30">
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-white dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 shadow-sm grid place-items-center overflow-hidden">
+      <header className="sticky top-0 z-30 border-b border-slate-200/60 bg-white/80 pt-[env(safe-area-inset-top)] backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="mx-auto grid w-full max-w-2xl grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-3 sm:px-4">
+          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700 sm:h-11 sm:w-11">
               <img src={logoUrl} alt="EJH Logo" className="w-9 h-9 object-contain" />
             </div>
-            <div className="leading-tight">
-              <h1 className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-blue-700 to-indigo-600 bg-clip-text text-transparent">
+            <div className="min-w-0 leading-tight">
+              <h1 className="truncate text-base font-extrabold tracking-tight bg-gradient-to-r from-blue-700 to-indigo-600 bg-clip-text text-transparent sm:text-lg">
                 EJH Check In
               </h1>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+              <p className="truncate text-[11px] text-slate-500 dark:text-slate-400 font-medium">
                 {profile?.position ? profile.position : "ระบบบันทึกงาน & GPS"}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             {profile && (
               <span className="hidden sm:block text-[11px] font-semibold text-slate-600 dark:text-slate-300 max-w-[110px] truncate">
                 {profile.full_name}
@@ -331,11 +331,11 @@ export default function TripTrackApp() {
         </div>
       </header>
 
-      <div className="max-w-2xl mx-auto pt-3">
+      <div className="mx-auto w-full max-w-2xl pt-3">
         <InstallPrompt />
       </div>
 
-      <main className="max-w-2xl mx-auto p-4">
+      <main className="mx-auto w-full max-w-2xl min-w-0 px-3 py-4 sm:px-4">
         {activeTab === "form" && (
           <FormView
             showToast={showToast}
@@ -380,7 +380,7 @@ export default function TripTrackApp() {
 
       {toast && (
         <div
-          className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-2xl shadow-2xl text-white flex items-center gap-2 backdrop-blur ${
+          className={`fixed left-3 right-3 top-[calc(4.75rem+env(safe-area-inset-top))] z-50 mx-auto flex max-w-md items-center gap-2 rounded-2xl px-4 py-3 text-white shadow-2xl backdrop-blur ${
             toast.type === "success" ? "bg-emerald-600/95" : "bg-red-600/95"
           }`}
         >
@@ -389,7 +389,7 @@ export default function TripTrackApp() {
         </div>
       )}
 
-      <nav className="fixed bottom-3 left-3 right-3 max-w-2xl mx-auto bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl flex z-30 shadow-2xl">
+      <nav className="fixed bottom-[calc(0.5rem+env(safe-area-inset-bottom))] left-2 right-2 z-30 mx-auto grid max-w-2xl grid-flow-col auto-cols-fr overflow-hidden rounded-2xl border border-slate-200 bg-white/90 p-1 shadow-2xl backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90 sm:left-3 sm:right-3">
         <NavButton icon={<FileText />} label="บันทึกงาน" isActive={activeTab === "form"} onClick={() => setActiveTab("form")} />
         <NavButton icon={<BarChart3 />} label="รายงาน" isActive={activeTab === "dashboard"} onClick={() => setActiveTab("dashboard")} />
         {isAdmin && (
@@ -422,14 +422,14 @@ function NavButton({
   return (
     <button
       onClick={onClick}
-      className={`flex-1 flex flex-col items-center py-3 gap-1 text-[10px] font-semibold transition rounded-2xl mx-1 my-1 ${
+      className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-0.5 py-2.5 text-[9px] font-semibold transition sm:text-[10px] ${
         isActive
           ? "text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/50"
           : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
       }`}
     >
       {React.cloneElement(icon as React.ReactElement<any>, { size: 20 })}
-      <span>{label}</span>
+      <span className="w-full truncate text-center">{label}</span>
     </button>
   );
 }
@@ -1126,13 +1126,13 @@ function FormView({
   }, []);
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 max-w-full space-y-4">
       {/* MODE TOGGLE */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-3">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 min-[390px]:grid-cols-2">
           <button
             onClick={() => setTrackingMode("gps")}
-            className={`p-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition ${
+            className={`min-w-0 p-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition ${
               trackingMode === "gps"
                 ? "bg-blue-600 text-white shadow"
                 : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
@@ -1142,7 +1142,7 @@ function FormView({
           </button>
           <button
             onClick={() => setTrackingMode("manual")}
-            className={`p-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition ${
+            className={`min-w-0 p-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition ${
               trackingMode === "manual"
                 ? "bg-indigo-600 text-white shadow"
                 : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
@@ -1155,20 +1155,20 @@ function FormView({
 
       {trackingMode === "gps" && (
         <>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
-            <div ref={mapRef} className="w-full h-64 bg-gray-200 dark:bg-gray-700" />
+          <div className="w-full max-w-full overflow-hidden rounded-2xl bg-white shadow-lg dark:bg-gray-800">
+            <div ref={mapRef} className="h-56 w-full max-w-full bg-gray-200 dark:bg-gray-700 sm:h-64" />
           </div>
 
           {/* NEARBY STORES */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="font-bold flex items-center gap-2 text-sm">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
+              <h2 className="flex min-w-0 items-start gap-2 text-sm font-bold">
                 <Store size={18} className="text-blue-600" />
                 ร้านใกล้คุณ (เช็คอินได้ในรัศมี {checkinRadiusM} ม.)
               </h2>
               <button
                 onClick={refreshGps}
-                className="h-9 px-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-xs font-bold flex items-center gap-1"
+                className="flex h-9 shrink-0 items-center gap-1 rounded-xl bg-blue-50 px-2.5 text-xs font-bold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
               >
                 <Locate size={14} /> รีเฟรช GPS
               </button>
@@ -1263,14 +1263,14 @@ function FormView({
           </div>
 
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="font-bold flex items-center gap-2">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+              <h2 className="flex min-w-0 items-center gap-2 font-bold">
                 <MapPin size={18} className="text-blue-600" /> สรุปการเดินทาง
               </h2>
               <VehiclePicker vehicle={vehicle} setVehicle={setVehicle} />
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-3">
               <Metric label="ระยะทางจริง" value={`${finalDistance.toFixed(2)} km`} tone="blue" />
               <Metric label="เวลาเดินทาง" value={formatMinutes(routeMin)} tone="amber" />
               <Metric label="ค่าเดินทาง" value={`฿${finalCost.toFixed(2)}`} tone="green" />
@@ -1288,14 +1288,14 @@ function FormView({
 
       {trackingMode === "manual" && (
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="font-bold flex items-center gap-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+            <h2 className="flex min-w-0 items-center gap-2 font-bold">
               <Edit3 size={18} className="text-indigo-600" /> กรอกระยะทาง/ค่าเดินทางเอง
             </h2>
             <VehiclePicker vehicle={vehicle} setVehicle={setVehicle} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 min-[390px]:grid-cols-2">
             <div>
               <label className="text-xs font-medium block mb-1 text-slate-600 dark:text-slate-300">
                 ระยะทาง (km)
@@ -1342,15 +1342,15 @@ function FormView({
 
       {/* FORM */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-bold">บันทึกข้อมูลการปฏิบัติงาน</h2>
-          <span className="text-xs text-green-600 bg-green-50 dark:bg-green-900/30 px-2 py-1 rounded-full">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+          <h2 className="min-w-0 font-bold">บันทึกข้อมูลการปฏิบัติงาน</h2>
+          <span className="shrink-0 rounded-full bg-green-50 px-2 py-1 text-[10px] text-green-600 dark:bg-green-900/30 sm:text-xs">
             Auto-Saved
           </span>
         </div>
 
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 min-[390px]:grid-cols-2">
             <div>
               <label className="text-sm font-medium block mb-1">👤 พนักงาน</label>
               <input
@@ -1424,7 +1424,7 @@ function FormView({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 min-[390px]:grid-cols-2">
             <div>
               <label className="text-sm font-medium block mb-1">จังหวัด</label>
               <input
@@ -1447,7 +1447,7 @@ function FormView({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 min-[390px]:grid-cols-2">
             <div>
               <label className="text-sm font-medium block mb-1">เวลาเข้า (Check-in)</label>
               <button
@@ -1509,7 +1509,7 @@ function FormView({
                 ))}
               </div>
             )}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-2">
               {JOB_PRESETS.map((j) => {
                 const active = formData.jobTypes.includes(j);
                 return (
@@ -1542,8 +1542,8 @@ function FormView({
 
           {/* ===== DYNAMIC SALES ITEMS ===== */}
           <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-3 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <label className="text-sm font-bold flex items-center gap-1.5">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                <label className="flex min-w-0 items-center gap-1.5 text-sm font-bold">
                 <ShoppingCart size={16} className="text-emerald-600" /> สินค้าที่ขายได้
               </label>
               <button
@@ -1564,9 +1564,9 @@ function FormView({
                 key={item.id}
                 className="rounded-xl bg-slate-50 dark:bg-slate-900/60 p-2.5 space-y-2 border border-slate-200 dark:border-slate-700"
               >
-                <div className="flex items-center gap-2">
+                <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
                   <span className="text-[11px] font-bold text-slate-400 w-5">{idx + 1}.</span>
-                  <div className="flex-1 grid grid-cols-2 gap-2">
+                  <div className="grid min-w-0 grid-cols-2 gap-2">
                     {PRODUCT_OPTIONS.map((p) => {
                       const active = item.name === p;
                       return (
@@ -1595,7 +1595,7 @@ function FormView({
                   </button>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 gap-2 min-[380px]:grid-cols-3">
                   <label className="text-[10px] font-bold text-slate-500">
                     จำนวน
                     <input
@@ -1659,8 +1659,8 @@ function FormView({
             </label>
 
             {/* แผนที่ตำแหน่งปัจจุบันสำหรับหน้าถ่ายรูป */}
-            <div className="mb-2 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 relative">
-              <div ref={photoMapRef} className="w-full h-44 bg-slate-200 dark:bg-slate-700" />
+            <div className="relative mb-2 w-full max-w-full overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+              <div ref={photoMapRef} className="h-44 w-full max-w-full bg-slate-200 dark:bg-slate-700" />
               <div className="absolute bottom-0 left-0 right-0 bg-black/55 text-white text-[11px] px-2 py-1 font-mono">
                 {startPoint
                   ? `📍 ${startPoint[0].toFixed(6)}, ${startPoint[1].toFixed(6)}`
@@ -1668,7 +1668,7 @@ function FormView({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-2">
               <label className="border-2 border-dashed dark:border-gray-600 rounded-xl p-4 text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition active:scale-[0.98]">
                 {/* Native camera — works on legacy iOS/Android, no WebRTC */}
                 <input
@@ -1737,7 +1737,7 @@ function VehiclePicker({
   setVehicle: (v: "car" | "pickup" | "motorcycle") => void;
 }) {
   return (
-    <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1 gap-1">
+    <div className="flex shrink-0 gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-700">
       <button
         onClick={() => setVehicle("motorcycle")}
         className={`p-2 rounded ${vehicle === "motorcycle" ? "bg-white dark:bg-gray-600 shadow" : ""}`}
@@ -1770,9 +1770,9 @@ function Metric({ label, value, tone }: { label: string; value: string; tone: st
     amber: "bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300",
   };
   return (
-    <div className={`p-3 rounded-xl ${tones[tone] ?? tones["blue"]}`}>
+    <div className={`min-w-0 p-3 rounded-xl ${tones[tone] ?? tones["blue"]}`}>
       <p className="text-[11px] opacity-80">{label}</p>
-      <p className="text-lg font-bold leading-tight">{value}</p>
+      <p className="break-words text-base font-bold leading-tight sm:text-lg">{value}</p>
     </div>
   );
 }
@@ -1950,7 +1950,7 @@ function DashboardView({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 max-w-full space-y-4">
       <h2 className="text-xl font-bold">รายงานสรุปการทำงาน</h2>
 
       <div className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-2xl p-4 shadow-lg space-y-3">
@@ -1999,7 +1999,7 @@ function DashboardView({
           📦 Handset {totals.handsets} · SIM {totals.sims} · ยอดขาย {thb(totals.sales)}
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 min-[390px]:grid-cols-2">
           <button
             onClick={handleSendLineNotify}
             disabled={sending}
@@ -2022,7 +2022,7 @@ function DashboardView({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow">
           <p className="text-xs text-gray-500">ระยะทางสะสม</p>
           <p className="text-xl font-bold text-blue-600">{totalDist.toFixed(1)} กม.</p>
@@ -2041,7 +2041,7 @@ function DashboardView({
           ) : (
             dayTrips.map((trip, idx) => (
               <div key={trip.id} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-                <div className="flex items-start justify-between gap-2">
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
                   <div className="min-w-0">
                     <p className="font-medium truncate text-sm">
                       {idx + 1}. {trip.place}
@@ -2153,7 +2153,7 @@ function SettingsView({
   const disabled = !isAdmin;
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 max-w-full space-y-4">
       <div className="flex items-center gap-2">
         <SettingsIcon className="text-blue-600" size={22} />
         <h2 className="text-xl font-bold">ตั้งค่าระบบ</h2>
@@ -2273,7 +2273,7 @@ function SettingsView({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 min-[390px]:grid-cols-2">
           <NumberField
             label="ราคาน้ำมัน (฿/ลิตร)"
             value={form.fuelPrice}

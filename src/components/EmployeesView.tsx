@@ -115,21 +115,21 @@ export default function EmployeesView({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden">
       <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-lg p-5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+          <div className="flex min-w-0 items-center gap-3">
             <span className="w-11 h-11 rounded-2xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-300 grid place-items-center">
               <Users size={20} />
             </span>
-            <div>
+            <div className="min-w-0">
               <h2 className="font-bold">รายชื่อพนักงาน</h2>
               <p className="text-[11px] text-slate-500">ทั้งหมด {rows.length} คน</p>
             </div>
           </div>
           <button
             onClick={() => setOpen((v) => !v)}
-            className="h-11 px-4 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-bold flex items-center gap-1.5 shadow-lg shadow-blue-600/25 active:scale-95 transition"
+            className="flex h-11 shrink-0 items-center gap-1.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-3 text-sm font-bold text-white shadow-lg shadow-blue-600/25 transition active:scale-95 sm:px-4"
           >
             <Plus size={16} /> เพิ่ม
           </button>
@@ -137,7 +137,7 @@ export default function EmployeesView({
 
         {open && (
           <div className="mt-4 space-y-3 rounded-2xl bg-slate-50 dark:bg-slate-900/50 p-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Input
                 label="รหัสพนักงาน"
                 value={form.employeeCode}
@@ -211,7 +211,7 @@ export default function EmployeesView({
           {rows.map((row) => (
             <div
               key={row.id}
-              className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-4 flex items-center gap-3"
+              className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-2xl bg-white p-4 shadow-sm dark:bg-slate-800 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"
             >
               <span className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white grid place-items-center font-bold text-sm shrink-0">
                 {row.full_name.slice(0, 1)}
@@ -237,7 +237,7 @@ export default function EmployeesView({
                 </p>
 
               </div>
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="col-span-2 flex items-center justify-end gap-1 sm:col-span-1 sm:shrink-0">
                 <IconBtn title="ตั้งรหัสผ่านใหม่" onClick={() => resetPassword(row)}>
                   <KeyRound size={16} />
                 </IconBtn>

@@ -82,8 +82,8 @@ function AuthPage() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-blue-700 via-blue-600 to-indigo-700 flex flex-col">
-      <div className="flex-1 flex flex-col justify-center px-5 py-10 max-w-md w-full mx-auto">
+    <main className="flex min-h-[100dvh] w-full max-w-full flex-col overflow-x-hidden bg-gradient-to-b from-blue-700 via-blue-600 to-indigo-700 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-4 py-8 sm:px-5 sm:py-10">
         <div className="text-center mb-8">
           <div className="w-20 h-20 mx-auto rounded-[28px] bg-white shadow-2xl grid place-items-center overflow-hidden">
             <img src={logoUrl} alt="โลโก้ Engcorp EJH Check In" className="w-14 h-14 object-contain" />

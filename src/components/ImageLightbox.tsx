@@ -19,7 +19,7 @@ export function TripThumbnails({
     );
   }
   return (
-    <div className="flex gap-1.5 shrink-0">
+    <div className="flex max-w-full shrink-0 flex-wrap gap-1.5">
       {images.slice(0, 3).map((src, i) => (
         <button
           key={i}
@@ -67,7 +67,7 @@ export function ImageLightbox({
   if (images.length === 0) return null;
   return (
     <div
-      className="fixed inset-0 z-[9999] bg-black/85 p-4 grid place-items-center"
+      className="fixed inset-0 z-[9999] grid max-w-full place-items-center overflow-hidden bg-black/85 p-3 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"

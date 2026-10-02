@@ -30,12 +30,12 @@ function Landing() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-[100dvh] w-full max-w-full overflow-x-hidden bg-slate-950 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-white">
       <div className="relative overflow-hidden">
         <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-blue-600/30 blur-3xl" />
         <div className="absolute top-40 -left-20 w-72 h-72 rounded-full bg-indigo-600/20 blur-3xl" />
 
-        <div className="relative max-w-md mx-auto px-6 pt-14 pb-10">
+        <div className="relative mx-auto max-w-md px-5 pb-10 pt-12 sm:px-6 sm:pt-14">
           <div className="w-16 h-16 rounded-3xl bg-white shadow-2xl grid place-items-center overflow-hidden">
             <img src={logoUrl} alt="โลโก้ Engcorp" className="w-11 h-11 object-contain" />
           </div>

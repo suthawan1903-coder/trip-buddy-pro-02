@@ -143,6 +143,8 @@
     color: var(--color-foreground);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 }
 
@@ -223,8 +225,19 @@
   }
 
   body {
-    padding-bottom: env(safe-area-inset-bottom);
+    min-width: 0;
     overscroll-behavior-y: contain;
+  }
+
+  #root {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .leaflet-container {
+    width: 100%;
+    max-width: 100%;
   }
 
   input,
