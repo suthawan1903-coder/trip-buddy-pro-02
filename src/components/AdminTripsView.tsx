@@ -99,7 +99,7 @@ export default function AdminTripsView({
   const totalDist = filtered.reduce((s, r) => s + Number(r.distance || 0), 0);
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden">
       <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-lg p-5 space-y-4">
         <div className="flex items-center gap-3">
           <span className="w-11 h-11 rounded-2xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 grid place-items-center">
@@ -112,7 +112,7 @@ export default function AdminTripsView({
             </p>
           </div>
         </div>
-        <div className="flex gap-2 overflow-x-auto">
+        <div className="flex max-w-full gap-2 overflow-x-auto pb-1">
           {["ทั้งหมด", ...STATUSES].map((s) => (
             <button
               key={s}
@@ -138,14 +138,14 @@ export default function AdminTripsView({
         <div className="space-y-2.5">
           {filtered.map((row) => (
             <div key={row.id} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-4 space-y-2">
-              <div className="flex items-start justify-between gap-2">
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
                 <div className="min-w-0">
-                  <p className="font-bold text-sm truncate">{row.place}</p>
-                  <p className="text-[11px] text-slate-500 truncate">
+                  <p className="break-words text-sm font-bold">{row.place}</p>
+                  <p className="break-words text-[11px] text-slate-500">
                     {row.trip_date} · {row.employee_name}
                     {row.employee_position ? ` (${row.employee_position})` : ""}
                   </p>
-                  <p className="text-[11px] text-slate-500 truncate">
+                  <p className="break-words text-[11px] text-slate-500">
                     {row.time_in || "--:--"} - {row.time_out || "--:--"} ·{" "}
                     {formatMinutes(row.duration_min)}
                     {row.district ? ` · อ.${row.district}` : ""}
@@ -167,7 +167,7 @@ export default function AdminTripsView({
 
               {editing === row.id ? (
                 <div className="space-y-2">
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2 min-[390px]:grid-cols-2">
                     <input
                       type="number"
                       step="0.01"

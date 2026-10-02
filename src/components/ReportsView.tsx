@@ -272,8 +272,8 @@ export default function ReportsView({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-lg p-5 space-y-4">
+    <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden">
+      <div className="space-y-4 rounded-3xl bg-white p-4 shadow-lg dark:bg-slate-800 sm:p-5">
         <div className="flex items-center gap-3">
           <span className="w-11 h-11 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 grid place-items-center">
             <CalendarRange size={20} />
@@ -284,7 +284,7 @@ export default function ReportsView({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 min-[390px]:grid-cols-2">
           <label className="text-[11px] font-bold text-slate-500">
             วันที่เริ่ม
             <input
@@ -347,24 +347,24 @@ export default function ReportsView({
           ))}
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2">
           <button
             onClick={() => void load()}
             disabled={loading}
-            className="h-11 rounded-xl bg-slate-900 dark:bg-white dark:text-slate-900 text-white text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60"
+            className="flex min-w-0 items-center justify-center gap-1 rounded-xl bg-slate-900 px-2 py-3 text-xs font-bold text-white disabled:opacity-60 dark:bg-white dark:text-slate-900"
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} ค้นหา
           </button>
           <button
             onClick={exportExcel}
-            className="h-11 rounded-xl bg-emerald-600 text-white text-xs font-bold flex items-center justify-center gap-1"
+            className="flex min-w-0 items-center justify-center gap-1 rounded-xl bg-emerald-600 px-2 py-3 text-xs font-bold text-white"
           >
             <Download size={14} /> Excel
           </button>
           <button
             onClick={() => void sendReport("group")}
             disabled={sending !== null}
-            className="h-11 rounded-xl bg-[#06C755] text-white text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60"
+            className="flex min-w-0 items-center justify-center gap-1 rounded-xl bg-[#06C755] px-2 py-3 text-center text-xs font-bold text-white disabled:opacity-60"
           >
             {sending === "group" ? (
               <Loader2 size={14} className="animate-spin" />
@@ -376,7 +376,7 @@ export default function ReportsView({
           <button
             onClick={() => void sendReport("personal")}
             disabled={sending !== null}
-            className="h-11 rounded-xl bg-[#06C755]/85 text-white text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60"
+            className="flex min-w-0 items-center justify-center gap-1 rounded-xl bg-[#06C755]/85 px-2 py-3 text-center text-xs font-bold text-white disabled:opacity-60"
           >
             {sending === "personal" ? (
               <Loader2 size={14} className="animate-spin" />
@@ -389,12 +389,12 @@ export default function ReportsView({
       </div>
 
       {!loading && chartData.length > 0 && (
-        <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-lg p-5">
+        <div className="max-w-full overflow-hidden rounded-3xl bg-white p-3 shadow-lg dark:bg-slate-800 sm:p-5">
           <div className="flex items-center gap-2 mb-3">
             <BarChart3 size={16} className="text-indigo-600" />
             <p className="font-bold text-sm">ระยะทาง / ค่าใช้จ่าย รายวัน</p>
           </div>
-          <div className="h-56 -ml-2">
+          <div className="h-48 w-full min-w-0 sm:h-56">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" vertical={false} />
