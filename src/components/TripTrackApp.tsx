@@ -2054,7 +2054,7 @@ function DashboardView({
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-lg">
-        <h3 className="font-bold mb-3">รายละเอียดงานวันที่ {selectedDate}</h3>
+        <h3 className="mb-3 font-bold">รายละเอียดการเช็คอิน · {selectedDate}</h3>
         <div className="space-y-2">
           {dayTrips.length === 0 ? (
             <p className="text-center text-gray-500 py-6 text-sm">ไม่มีรายการงานในวันที่เลือก</p>
