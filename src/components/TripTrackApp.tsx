@@ -5,6 +5,7 @@ import { useSession } from "@/hooks/use-session";
 import EmployeesView from "@/components/EmployeesView";
 import AdminTripsView from "@/components/AdminTripsView";
 import ReportsView from "@/components/ReportsView";
+import { TripThumbnails, useLightbox } from "@/components/ImageLightbox";
 
 import {
   LogOut,
@@ -72,6 +73,7 @@ import {
 
 
 import { fetchPttFuelPrices, type FuelPrice } from "@/lib/fuel-price-client";
+import { prepareLinePhotos, prepareShareFiles } from "@/lib/trip-photos";
 import {
   fetchRoute,
   geocodeDistrict,
@@ -136,6 +138,7 @@ type Trip = {
   job?: string | null;
   salesItems?: { name: string; qty: number; unitPrice?: number; total: number }[] | null;
   salesTotal?: number | null;
+  images?: string[] | null;
 };
 
 
@@ -236,6 +239,7 @@ export default function TripTrackApp() {
             job: r.job,
             salesItems: Array.isArray(r.sales_items) ? r.sales_items : [],
             salesTotal: r.sales_total,
+            images: Array.isArray(r.images) ? r.images : [],
 
           })),
         );
@@ -1797,6 +1801,7 @@ function DashboardView({
   const [selectedDate, setSelectedDate] = useState(utcDateString());
   const [dayTrips, setDayTrips] = useState<Trip[]>([]);
   const [loadingDay, setLoadingDay] = useState(false);
+  const lightbox = useLightbox();
   const todayStr = utcDateString();
 
   /** ดึงงานของ "วันที่ที่เลือก" จากฐานข้อมูล (RLS จำกัดให้เห็นเฉพาะของตัวเอง / แอดมินเห็นทั้งหมด) */
@@ -1807,7 +1812,7 @@ function DashboardView({
       const { data, error } = await supabase
         .from("trips")
         .select(
-          "id, trip_date, employee_name, employee_position, place, province, district, time_in, time_out, distance, cost, status, duration_min, job_type, job, sales_items, sales_total",
+          "id, trip_date, employee_name, employee_position, place, province, district, time_in, time_out, distance, cost, status, duration_min, job_type, job, sales_items, sales_total, images",
         )
         .eq("trip_date", selectedDate)
         .order("created_at", { ascending: true });
@@ -1835,6 +1840,7 @@ function DashboardView({
             job: r.job,
             salesItems: Array.isArray(r.sales_items) ? r.sales_items : [],
             salesTotal: r.sales_total,
+            images: Array.isArray(r.images) ? r.images : [],
           })),
         );
       }
@@ -1901,6 +1907,7 @@ function DashboardView({
 
     setSending(true);
     try {
+      const photos = await prepareLinePhotos(dayTrips);
       await sendFlex({
         data: {
           accessToken: settings.lineToken,
@@ -1913,6 +1920,7 @@ function DashboardView({
               ? buildSummaryFlex(reportArgs)
               : buildReportFlex(reportArgs),
           ...(targetType === "group" ? {} : { fallbackText: buildReportText(reportArgs) }),
+          photos,
         },
       });
       showToast(`ส่งรายงานวันที่ ${selectedDate} เข้า LINE สำเร็จ ✅`);
@@ -1923,10 +1931,22 @@ function DashboardView({
     }
   };
 
-  const handleShareLine = () => {
+  const handleShareLine = async () => {
     if (reportTrips.length === 0) return showToast("วันที่เลือกยังไม่มีรายการงาน", "error");
+    const text = buildReportText(reportArgs);
+    const files = await prepareShareFiles(dayTrips);
+    if (navigator.share) {
+      const shareData: ShareData = { title: `รายงานสรุปการทำงาน ${selectedDate}`, text };
+      if (files.length > 0 && navigator.canShare?.({ files })) shareData.files = files;
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      }
+    }
     window.open(
-      `https://line.me/R/msg/text/?${encodeURIComponent(buildReportText(reportArgs))}`,
+      `https://line.me/R/msg/text/?${encodeURIComponent(text)}`,
       "_blank",
     );
   };
@@ -2014,7 +2034,7 @@ function DashboardView({
             <FileText size={16} /> ส่งออก Excel
           </button>
           <button
-            onClick={handleShareLine}
+            onClick={() => void handleShareLine()}
             className="col-span-2 bg-white/15 hover:bg-white/25 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition border border-white/20"
           >
             <ExternalLink size={16} /> แชร์เอง
@@ -2034,7 +2054,7 @@ function DashboardView({
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-lg">
-        <h3 className="font-bold mb-3">รายละเอียดงานวันที่ {selectedDate}</h3>
+        <h3 className="mb-3 font-bold">รายละเอียดการเช็คอิน · {selectedDate}</h3>
         <div className="space-y-2">
           {dayTrips.length === 0 ? (
             <p className="text-center text-gray-500 py-6 text-sm">ไม่มีรายการงานในวันที่เลือก</p>
@@ -2070,11 +2090,19 @@ function DashboardView({
                     </span>
                   </div>
                 </div>
+                <div className="mt-2 max-w-full">
+                  <TripThumbnails
+                    images={Array.isArray(trip.images) ? trip.images : []}
+                    onOpen={lightbox.open}
+                    label={trip.place}
+                  />
+                </div>
               </div>
             ))
           )}
         </div>
       </div>
+      {lightbox.node}
     </div>
   );
 }

@@ -41,6 +41,7 @@ import {
 } from "@/lib/report-format";
 import { formatMinutes, utcDateString } from "@/lib/geo";
 import { thb } from "@/lib/sales";
+import { prepareLinePhotos } from "@/lib/trip-photos";
 import type { AppSettings } from "@/components/TripTrackApp";
 
 type ReportRow = {
@@ -249,7 +250,16 @@ export default function ReportsView({
     setSending(targetType);
     try {
       const args = reportArgs();
-      const photos = await preparePhotos(rows);
+      const photos = await prepareLinePhotos(
+        rows.map((row) => ({
+          id: row.id,
+          date: row.trip_date,
+          employeeName: row.employee_name,
+          place: row.place,
+          district: row.district,
+          images: row.images,
+        })),
+      );
       await notify({
         data: {
           accessToken,
@@ -493,40 +503,3 @@ export default function ReportsView({
   );
 }
 
-/**
- * เตรียมลิงก์รูปหน้างานสำหรับ LINE (ต้องเป็น https) — 1 รูปแรกต่อร้าน
- * รูปที่เก็บเป็นข้อมูลฝัง จะถูกอัปโหลดขึ้นที่เก็บไฟล์แล้วสร้างลิงก์ชั่วคราว 7 วัน
- * ร้านที่ไม่มีรูป หรืออัปโหลดไม่สำเร็จ จะถูกข้าม (ส่งแค่ข้อความ)
- */
-async function preparePhotos(rows: ReportRow[]) {
-  const { supabase } = await import("@/integrations/supabase/client");
-  const uid = (await supabase.auth.getUser()).data.user?.id;
-  const out: { title: string; subtitle?: string; url: string }[] = [];
-  for (const r of rows.slice(0, 40)) {
-    try {
-      const img = Array.isArray(r.images) ? r.images.find((x) => typeof x === "string" && x) : null;
-      if (!img) continue;
-      let url: string | null = null;
-      if (/^https:\/\//.test(img)) url = img;
-      else if (img.startsWith("data:image/") && uid) {
-        const blob = await (await fetch(img)).blob();
-        const path = `${uid}/${r.id}-0.jpg`;
-        const up = await supabase.storage
-          .from("trip-photos")
-          .upload(path, blob, { contentType: blob.type || "image/jpeg", upsert: false });
-        if (up.error && !/exist|duplicate/i.test(up.error.message)) continue;
-        const signed = await supabase.storage.from("trip-photos").createSignedUrl(path, 60 * 60 * 24 * 7);
-        url = signed.data?.signedUrl ?? null;
-      }
-      if (!url) continue;
-      out.push({
-        title: r.place,
-        subtitle: [r.trip_date, r.employee_name, r.district].filter(Boolean).join(" · "),
-        url,
-      });
-    } catch {
-      // ข้ามรูปที่มีปัญหา
-    }
-  }
-  return out;
-}
