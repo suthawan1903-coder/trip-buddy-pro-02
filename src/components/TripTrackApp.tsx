@@ -1086,6 +1086,7 @@ function FormView({
         job: data.job,
         salesItems: Array.isArray(data.sales_items) ? (data.sales_items as any) : [],
         salesTotal: data.sales_total,
+        images: Array.isArray(data.images) ? data.images.filter((image): image is string => typeof image === "string") : [],
       });
 
       showToast("บันทึกขึ้นฐานข้อมูลเรียบร้อย ✅");
@@ -1802,6 +1803,9 @@ function DashboardView({
   const [dayTrips, setDayTrips] = useState<Trip[]>([]);
   const [loadingDay, setLoadingDay] = useState(false);
   const lightbox = useLightbox();
+  const [shareFiles, setShareFiles] = useState<File[]>([]);
+  const [sharePhotos, setSharePhotos] = useState<{ title: string; url: string }[]>([]);
+  const [preparingShare, setPreparingShare] = useState(false);
   const todayStr = utcDateString();
 
   /** ดึงงานของ "วันที่ที่เลือก" จากฐานข้อมูล (RLS จำกัดให้เห็นเฉพาะของตัวเอง / แอดมินเห็นทั้งหมด) */
@@ -1851,6 +1855,21 @@ function DashboardView({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, trips.length]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setShareFiles([]);
+    setSharePhotos([]);
+    setPreparingShare(true);
+    Promise.all([prepareShareFiles(dayTrips), prepareLinePhotos(dayTrips)])
+      .then(([files, photos]) => {
+        if (cancelled) return;
+        setShareFiles(files);
+        setSharePhotos(photos);
+      })
+      .finally(() => { if (!cancelled) setPreparingShare(false); });
+    return () => { cancelled = true; };
+  }, [dayTrips]);
 
   const reportTrips: ReportTrip[] = useMemo(
     () =>
@@ -1934,10 +1953,11 @@ function DashboardView({
   const handleShareLine = async () => {
     if (reportTrips.length === 0) return showToast("วันที่เลือกยังไม่มีรายการงาน", "error");
     const text = buildReportText(reportArgs);
-    const files = await prepareShareFiles(dayTrips);
+    const photoLinks = sharePhotos.map((photo, index) => `${index + 1}. ${photo.title}\n${photo.url}`).join("\n\n");
+    const textWithPhotos = photoLinks ? `${text}\n\n📷 รูปภาพเช็คอิน (ลิงก์เปิดได้ 7 วัน)\n${photoLinks}` : text;
     if (navigator.share) {
-      const shareData: ShareData = { title: `รายงานสรุปการทำงาน ${selectedDate}`, text };
-      if (files.length > 0 && navigator.canShare?.({ files })) shareData.files = files;
+      const shareData: ShareData = { title: `รายงานสรุปการทำงาน ${selectedDate}`, text: textWithPhotos };
+      if (shareFiles.length > 0 && navigator.canShare?.({ files: shareFiles })) shareData.files = shareFiles;
       try {
         await navigator.share(shareData);
         return;
@@ -1946,7 +1966,7 @@ function DashboardView({
       }
     }
     window.open(
-      `https://line.me/R/msg/text/?${encodeURIComponent(text)}`,
+      `https://line.me/R/msg/text/?${encodeURIComponent(textWithPhotos)}`,
       "_blank",
     );
   };
@@ -2035,9 +2055,10 @@ function DashboardView({
           </button>
           <button
             onClick={() => void handleShareLine()}
-            className="col-span-2 bg-white/15 hover:bg-white/25 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition border border-white/20"
+            disabled={preparingShare || loadingDay}
+            className="min-w-0 min-[390px]:col-span-2 bg-white/15 hover:bg-white/25 disabled:opacity-60 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition border border-white/20"
           >
-            <ExternalLink size={16} /> แชร์เอง
+            <ExternalLink size={16} /> {preparingShare ? "กำลังเตรียมรูป..." : "แชร์เอง"}
           </button>
         </div>
       </div>
@@ -2061,17 +2082,18 @@ function DashboardView({
           ) : (
             dayTrips.map((trip, idx) => (
               <div key={trip.id} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
+                <div className="grid grid-cols-1 items-start gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                   <div className="min-w-0">
-                    <p className="font-medium truncate text-sm">
+                    <p className="break-words text-sm font-bold">
                       {idx + 1}. {trip.place}
                     </p>
-                    <p className="text-[11px] text-gray-500">
+                    <p className="text-[11px] text-muted-foreground">
                       {trip.employeeName} · {trip.timeIn || "--:--"} - {trip.timeOut || "--:--"} ·{" "}
                       {formatMinutes(trip.durationMin ?? null)}
                       {trip.jobType ? ` · ${trip.jobType}` : ""}
                     </p>
-                    {trip.job && <p className="text-[11px] text-gray-500 mt-0.5">{trip.job}</p>}
+                    {(trip.district || trip.province) && <p className="mt-0.5 text-[11px] text-muted-foreground">{[trip.district, trip.province].filter(Boolean).join(" · ")}</p>}
+                    {trip.job && <p className="mt-0.5 break-words text-[11px] text-muted-foreground">{trip.job}</p>}
                     {(trip.salesItems ?? []).length > 0 && (
                       <p className="text-[11px] text-emerald-600 mt-0.5">
                         ขาย:{" "}
@@ -2081,7 +2103,7 @@ function DashboardView({
                       </p>
                     )}
                   </div>
-                  <div className="text-right shrink-0">
+                  <div className="flex min-w-0 items-center justify-between gap-2 sm:block sm:shrink-0 sm:text-right">
                     <p className="font-bold text-sm">
                       {Number(trip.dist).toFixed(1)} กม. · ฿{Number(trip.cost).toFixed(0)}
                     </p>
