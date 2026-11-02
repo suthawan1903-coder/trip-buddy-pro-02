@@ -1086,7 +1086,7 @@ function FormView({
         job: data.job,
         salesItems: Array.isArray(data.sales_items) ? (data.sales_items as any) : [],
         salesTotal: data.sales_total,
-        images: Array.isArray(data.images) ? data.images : [],
+        images: Array.isArray(data.images) ? data.images.filter((image): image is string => typeof image === "string") : [],
       });
 
       showToast("บันทึกขึ้นฐานข้อมูลเรียบร้อย ✅");
