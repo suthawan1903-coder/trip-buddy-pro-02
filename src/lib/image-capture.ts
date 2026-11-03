@@ -174,3 +174,32 @@ export function dataUrlToBlob(dataUrl: string): Blob {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return new Blob([bytes], { type: mime });
 }
+
+/** เตรียมรูปย่อบนจอ (≤96px, JPEG q0.5) ใช้ตอนแสดง thumbnail เพื่อประหยัด RAM */
+export async function thumbnailDataUrl(dataUrl: string, maxSide = 96, quality = 0.5): Promise<string> {
+  try {
+    if (typeof document === "undefined" || !dataUrl.startsWith("data:image")) return dataUrl;
+    const img = await loadImage(dataUrl);
+    const scale = Math.min(1, maxSide / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round((img.naturalWidth || maxSide) * scale));
+    canvas.height = Math.max(1, Math.round((img.naturalHeight || maxSide) * scale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return dataUrl;
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", quality);
+  } catch {
+    return dataUrl;
+  }
+}
+
+/** ย่อรูปหลายรูปพร้อมกัน (จำกัด 6 รูปแรกที่เห็นบนจอ) */
+export async function thumbnailDataUrls(
+  urls: string[],
+  maxSide = 96,
+  quality = 0.5,
+): Promise<string[]> {
+  const out: string[] = [];
+  for (const url of urls) out.push(await thumbnailDataUrl(url, maxSide, quality));
+  return out;
+}

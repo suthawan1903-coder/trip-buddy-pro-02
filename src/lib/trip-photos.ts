@@ -9,6 +9,7 @@ export type PhotoTrip = {
   images?: string[] | null;
 };
 
+/** รูปสำหรับส่ง LINE: แปลง data URL เป็นลิงก์ชั่วคราว 7 วัน ข้ามร้านที่ไม่มีรูป */
 export async function prepareLinePhotos(rows: PhotoTrip[]) {
   const uid = (await supabase.auth.getUser()).data.user?.id;
   const photos: { title: string; subtitle?: string; url: string }[] = [];

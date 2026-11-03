@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { ImageOff, X } from "lucide-react";
+import { thumbnailDataUrl } from "@/lib/image-capture";
 
-/** รูปเช็คอินแบบย่อ + placeholder เมื่อไม่มีรูป */
+/** รูปเช็คอินแบบย่อ (lazy + ย่อขนาดจริงผ่าน canvas) + placeholder เมื่อไม่มีรูป */
 export function TripThumbnails({
   images,
   onOpen,
@@ -11,6 +12,39 @@ export function TripThumbnails({
   onOpen: (images: string[], index: number) => void;
   label?: string;
 }) {
+  // โหลดและย่อเฉพาะรูปที่เลื่อนถึง (IntersectionObserver) เพื่อไม่กิน RAM มือถือ
+  const [holder, setHolder] = useState<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(false);
+  const [thumbs, setThumbs] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!holder) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => entries.forEach((e) => e.isIntersecting && setVisible(true)),
+      { rootMargin: "120px" },
+    );
+    observer.observe(holder);
+    return () => observer.disconnect();
+  }, [holder]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setThumbs([]);
+    if (!visible || images.length === 0) return;
+    void (async () => {
+      const out: string[] = [];
+      for (const src of images.slice(0, 3)) out.push(await thumbnailDataUrl(src));
+      if (!cancelled) setThumbs(out);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, images]);
+
   if (!images || images.length === 0) {
     return (
       <div className="w-14 h-14 shrink-0 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-400 grid place-items-center">
@@ -19,7 +53,7 @@ export function TripThumbnails({
     );
   }
   return (
-    <div className="flex max-w-full shrink-0 flex-wrap gap-1.5">
+    <div ref={setHolder} className="flex max-w-full shrink-0 flex-wrap gap-1.5">
       {images.slice(0, 3).map((src, i) => (
         <button
           key={i}
@@ -27,12 +61,11 @@ export function TripThumbnails({
           onClick={() => onOpen(images, i)}
           className="relative w-14 h-14 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600"
         >
-          <img
-            src={src}
-            alt={`รูปเช็คอิน${label ? ` ${label}` : ""} ${i + 1}`}
-            loading="lazy"
-            className="w-full h-full object-cover"
-          />
+          {thumbs[i] ? (
+            <img src={thumbs[i]} alt={`รูปเช็คอิน${label ? ` ${label}` : ""} ${i + 1}`} loading="lazy" decoding="async" className="w-full h-full object-cover" />
+          ) : (
+            <span className="absolute inset-0 animate-pulse bg-slate-200 dark:bg-slate-600" />
+          )}
           {i === 2 && images.length > 3 && (
             <span className="absolute inset-0 bg-black/55 text-white text-[11px] font-bold grid place-items-center">
               +{images.length - 2}
@@ -44,7 +77,7 @@ export function TripThumbnails({
   );
 }
 
-/** Popup ดูรูปขนาดใหญ่ */
+/** Popup ดูรูปขนาดใหญ่ (โหลดเต็มขนาดเฉพาะรูปที่กด) */
 export function ImageLightbox({
   images,
   index,
@@ -84,6 +117,7 @@ export function ImageLightbox({
         <img
           src={images[i]}
           alt={`รูปเช็คอินขนาดใหญ่ ${i + 1}`}
+          decoding="async"
           className="max-w-full max-h-[75vh] rounded-2xl object-contain"
         />
         {images.length > 1 && (
@@ -97,7 +131,7 @@ export function ImageLightbox({
                   k === i ? "border-white" : "border-transparent opacity-60"
                 }`}
               >
-                <img src={src} alt={`ย่อ ${k + 1}`} className="w-full h-full object-cover" />
+                <img src={src} alt={`ย่อ ${k + 1}`} loading="lazy" decoding="async" className="w-full h-full object-cover" />
               </button>
             ))}
           </div>
