@@ -5,7 +5,7 @@ import { useSession } from "@/hooks/use-session";
 import EmployeesView from "@/components/EmployeesView";
 import AdminTripsView from "@/components/AdminTripsView";
 import ReportsView from "@/components/ReportsView";
-import { TripThumbnails, useLightbox } from "@/components/ImageLightbox";
+import { useLightbox } from "@/components/ImageLightbox";
 
 import {
   LogOut,
@@ -42,7 +42,6 @@ import {
   ShoppingCart,
 
 } from "lucide-react";
-import * as XLSX from "xlsx";
 import { sendLineMessage, notifyFlexReport } from "@/lib/line.functions";
 import {
   buildExcelAoa,
@@ -183,21 +182,6 @@ export default function TripTrackApp() {
   const employeeName = profile?.full_name ?? "";
 
   useEffect(() => {
-    if (typeof document === "undefined") return;
-    if (!document.getElementById("leaflet-css")) {
-      const link = document.createElement("link");
-      link.id = "leaflet-css";
-      link.rel = "stylesheet";
-      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-      document.head.appendChild(link);
-    }
-    if (!document.getElementById("leaflet-js")) {
-      const script = document.createElement("script");
-      script.id = "leaflet-js";
-      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-      document.body.appendChild(script);
-    }
-
     (async () => {
       try {
         const s = await loadSettings();
@@ -215,7 +199,7 @@ export default function TripTrackApp() {
     (async () => {
       const { data, error } = await supabase
         .from("trips")
-        .select("*")
+        .select("id, trip_date, employee_name, employee_position, place, province, district, time_in, time_out, distance, cost, status, duration_min, job_type, job, sales_items, sales_total")
         .order("trip_date", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(300);
@@ -239,7 +223,6 @@ export default function TripTrackApp() {
             job: r.job,
             salesItems: Array.isArray(r.sales_items) ? r.sales_items : [],
             salesTotal: r.sales_total,
-            images: Array.isArray(r.images) ? r.images : [],
 
           })),
         );
@@ -589,7 +572,7 @@ function FormView({
   /* ------------------------------ map init ------------------------------ */
   useEffect(() => {
     if (trackingMode !== "gps") return;
-    if (!mapRef.current || mapInstance) return;
+    if (trackingMode !== "gps" || !mapRef.current || mapInstance) return;
     let cancelled = false;
     const initMap = async () => {
       let attempts = 0;
@@ -614,7 +597,7 @@ function FormView({
 
   /* ------------- mini map in the photo (check-in evidence) section --------- */
   useEffect(() => {
-    if (!photoMapRef.current || photoMapInstance) return;
+    if (!photoMapRef.current || photoMapInstance || !window.L) return;
     let cancelled = false;
     const init = async () => {
       let attempts = 0;
@@ -655,31 +638,45 @@ function FormView({
 
   /* --------------------- auto GPS (Android/iOS friendly) ------------------ */
   useEffect(() => {
+    if (trackingMode !== "gps" || typeof document === "undefined") return;
     let stopped = false;
+    let stopWatch: (() => void) | null = null;
+    const start = () => {
+      if (stopped || document.hidden || stopWatch) return;
+      stopWatch = watchPosition(
+        (p, acc) => {
+          setStartPoint((prev) => prev && haversineKm(prev, p) < 0.005 ? prev : p);
+          setAccuracy((prev) => prev !== null && Math.abs(prev - acc) < 3 ? prev : acc);
+          setGpsStatus("ready");
+        },
+        () => setGpsStatus((s) => (s === "ready" ? s : "error")),
+      );
+    };
+    const stop = () => {
+      stopWatch?.();
+      stopWatch = null;
+    };
+    const updateVisibility = () => {
+      if (document.hidden) stop();
+      else start();
+    };
     setGpsStatus("locating");
-    getPosition()
+    getPosition({ timeoutMs: 8000 })
       .then((pos) => {
         if (stopped) return;
         setStartPoint([pos.coords.latitude, pos.coords.longitude]);
         setAccuracy(pos.coords.accuracy);
         setGpsStatus("ready");
       })
-      .catch(() => {
-        if (!stopped) setGpsStatus("error");
-      });
-    const stopWatch = watchPosition(
-      (p, acc) => {
-        setStartPoint(p);
-        setAccuracy(acc);
-        setGpsStatus("ready");
-      },
-      () => setGpsStatus((s) => (s === "ready" ? s : "error")),
-    );
+      .catch(() => { if (!stopped) setGpsStatus("error"); });
+    start();
+    document.addEventListener("visibilitychange", updateVisibility);
     return () => {
       stopped = true;
-      stopWatch();
+      stop();
+      document.removeEventListener("visibilitychange", updateVisibility);
     };
-  }, []);
+  }, [trackingMode]);
 
   /* --------------- draw my marker + radius circle on the map -------------- */
   useEffect(() => {
@@ -918,11 +915,11 @@ function FormView({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const displaySuggestions = customers.filter((c) => {
+  const displaySuggestions = useMemo(() => customers.filter((c) => {
     const matchProv = !formData.prov || c.province === formData.prov;
     const matchSearch = c.name.toLowerCase().includes(formData.place.toLowerCase());
     return matchProv && matchSearch;
-  });
+  }).slice(0, 50), [customers, formData.prov, formData.place]);
 
   const saveDraftToLocal = (data: typeof formData) => {
     localStorage.setItem("tripDraft", JSON.stringify({ ...data, images: [] }));
@@ -1411,7 +1408,7 @@ function FormView({
             />
             {showSuggestions && displaySuggestions.length > 0 && (
               <div className="absolute z-20 mt-1 left-0 right-0 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-xl max-h-72 overflow-y-auto">
-                {displaySuggestions.slice(0, 50).map((c, idx) => (
+                {displaySuggestions.map((c, idx) => (
                   <button
                     type="button"
                     key={`${c.id}-${idx}`}
@@ -1706,7 +1703,7 @@ function FormView({
               <div className="grid grid-cols-3 gap-2 mt-3">
                 {formData.images.map((imgSrc, index) => (
                   <div key={index} className="relative aspect-square">
-                    <img src={imgSrc} alt={`upload-${index}`} className="w-full h-full object-cover rounded-lg" />
+                    <img src={imgSrc} alt={`upload-${index}`} loading="lazy" decoding="async" className="w-full h-full object-cover rounded-lg" />
                     <button
                       onClick={() => handleRemoveImage(index)}
                       className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 shadow-md"
@@ -1803,8 +1800,6 @@ function DashboardView({
   const [dayTrips, setDayTrips] = useState<Trip[]>([]);
   const [loadingDay, setLoadingDay] = useState(false);
   const lightbox = useLightbox();
-  const [shareFiles, setShareFiles] = useState<File[]>([]);
-  const [sharePhotos, setSharePhotos] = useState<{ title: string; url: string }[]>([]);
   const [preparingShare, setPreparingShare] = useState(false);
   const todayStr = utcDateString();
 
@@ -1855,21 +1850,6 @@ function DashboardView({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, trips.length]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setShareFiles([]);
-    setSharePhotos([]);
-    setPreparingShare(true);
-    Promise.all([prepareShareFiles(dayTrips), prepareLinePhotos(dayTrips)])
-      .then(([files, photos]) => {
-        if (cancelled) return;
-        setShareFiles(files);
-        setSharePhotos(photos);
-      })
-      .finally(() => { if (!cancelled) setPreparingShare(false); });
-    return () => { cancelled = true; };
-  }, [dayTrips]);
 
   const reportTrips: ReportTrip[] = useMemo(
     () =>
@@ -1952,23 +1932,26 @@ function DashboardView({
 
   const handleShareLine = async () => {
     if (reportTrips.length === 0) return showToast("วันที่เลือกยังไม่มีรายการงาน", "error");
+    setPreparingShare(true);
     const text = buildReportText(reportArgs);
-    const photoLinks = sharePhotos.map((photo, index) => `${index + 1}. ${photo.title}\n${photo.url}`).join("\n\n");
-    const textWithPhotos = photoLinks ? `${text}\n\n📷 รูปภาพเช็คอิน (ลิงก์เปิดได้ 7 วัน)\n${photoLinks}` : text;
-    if (navigator.share) {
-      const shareData: ShareData = { title: `รายงานสรุปการทำงาน ${selectedDate}`, text: textWithPhotos };
-      if (shareFiles.length > 0 && navigator.canShare?.({ files: shareFiles })) shareData.files = shareFiles;
-      try {
-        await navigator.share(shareData);
-        return;
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") return;
+    try {
+      const [files, photos] = await Promise.all([prepareShareFiles(dayTrips), prepareLinePhotos(dayTrips)]);
+      const photoLinks = photos.map((photo, index) => `${index + 1}. ${photo.title}\n${photo.url}`).join("\n\n");
+      const textWithPhotos = photoLinks ? `${text}\n\n📷 รูปภาพเช็คอิน (ลิงก์เปิดได้ 7 วัน)\n${photoLinks}` : text;
+      if (navigator.share) {
+        const shareData: ShareData = { title: `รายงานสรุปการทำงาน ${selectedDate}`, text: textWithPhotos };
+        if (files.length > 0 && navigator.canShare?.({ files })) shareData.files = files;
+        try {
+          await navigator.share(shareData);
+          return;
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") return;
+        }
       }
+      window.open(`https://line.me/R/msg/text/?${encodeURIComponent(textWithPhotos)}`, "_blank");
+    } finally {
+      setPreparingShare(false);
     }
-    window.open(
-      `https://line.me/R/msg/text/?${encodeURIComponent(textWithPhotos)}`,
-      "_blank",
-    );
   };
 
   const handleExportExcel = () => {

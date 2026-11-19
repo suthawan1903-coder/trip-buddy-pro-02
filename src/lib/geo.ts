@@ -203,12 +203,13 @@ export function getPosition(opts: GeoOptions = {}): Promise<GeolocationPosition>
 export function watchPosition(
   onUpdate: (p: LatLng, accuracy: number) => void,
   onError?: (e: GeolocationPositionError) => void,
+  options: PositionOptions = {},
 ): () => void {
   if (typeof navigator === "undefined" || !navigator.geolocation) return () => {};
   const id = navigator.geolocation.watchPosition(
     (pos) => onUpdate([pos.coords.latitude, pos.coords.longitude], pos.coords.accuracy),
     (err) => onError?.(err),
-    { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
+    { enableHighAccuracy: true, timeout: 30000, maximumAge: 15000, ...options },
   );
   return () => navigator.geolocation.clearWatch(id);
 }
